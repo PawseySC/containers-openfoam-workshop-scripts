@@ -1,8 +1,9 @@
 #!/bin/bash -l
 #SBATCH --ntasks=4
-#@@#SBATCH --mem=16G
+#SBATCH --mem=16G
 #SBATCH --ntasks-per-node=28
 #SBATCH --cluster=zeus
+#@@#SBATCH --mem=60G
 #@@#SBATCH --ntasks-per-node=24
 #@@#SBATCH --cluster=magnus
 #SBATCH --partition=workq

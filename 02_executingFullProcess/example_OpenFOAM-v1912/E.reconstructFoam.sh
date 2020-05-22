@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #SBATCH --ntasks=1
-#@@#SBATCH --mem=32G
+#SBATCH --mem=16G
 #SBATCH --ntasks-per-node=28
 #SBATCH --clusters=zeus
 #SBATCH --time=0:10:00
@@ -19,7 +19,8 @@ theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
  
 #3. Defining the case directory
 #baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/run
-baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+#baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+baseWorkingDir=./run
 caseName=channel395
 caseDir=$baseWorkingDir/$caseName
 
