@@ -2,7 +2,8 @@
 #SBATCH --export=NONE
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
-#SBATCH --partition=copyq
+#@@#SBATCH --partition=copyq #Ideally, you should be using the copyq for this kind of processes
+#SBATCH --partition=workq
  
 #1. Load the necessary modules
 module load singularity
@@ -19,7 +20,8 @@ tutorialAppDir=incompressible/pimpleFoam/LES
 tutorialName=channel395
 tutorialCase=$tutorialAppDir/$tutorialName
 
-baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+#baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+baseWorkingDir=./run
 if ! [ -d $baseWorkingDir ]; then
     echo "Creating baseWorkingDir=$baseWorkingDir"
 mkdir -p $baseWorkingDir
@@ -29,7 +31,8 @@ caseDir=$baseWorkingDir/$caseName
 
 #4. Copy the tutorialCase to the workingDir
 if ! [ -d $caseDir ]; then
-   srun -n 1 -N 1 singularity exec $theImage bash -c 'cp -r $FOAM_TUTORIALS/'"$tutorialCase $caseDir"
+   #srun -n 1 -N 1 singularity exec $theImage bash -c 'cp -r $FOAM_TUTORIALS/'"$tutorialCase $caseDir"
+   srun -n 1 -N 1 singularity exec $theImage cp -r /opt/OpenFOAM/OpenFOAM-$theVersion/tutorials/$tutorialCase $caseDir
 else
    echo "The case=$caseDir already exists, no new copy has been performed"
 fi

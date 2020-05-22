@@ -1,9 +1,8 @@
 #!/bin/bash -l
 #SBATCH --ntasks=4
-#@@#SBATCH --mem=4G
-#@@#SBATCH --mem=64G
-#@@#SBATCH --ntasks-per-node=28
-#@@#SBATCH --cluster=zeus
+#@@#SBATCH --mem=16G
+#SBATCH --ntasks-per-node=28
+#SBATCH --cluster=zeus
 #@@#SBATCH --ntasks-per-node=24
 #@@#SBATCH --cluster=magnus
 #SBATCH --partition=workq
@@ -22,7 +21,8 @@ theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
  
 #3. Defining the case directory
 #baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/run
-baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+#baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+baseWorkingDir=./run
 caseName=channel395
 caseDir=$baseWorkingDir/$caseName
 
@@ -61,7 +61,7 @@ foam_startFrom=startTime
 #foam_startFrom=latestTime
 foam_startTime=0
 #foam_startTime=15
-foam_endTime=15
+foam_endTime=10
 #foam_endTime=30
 foam_writeInterval=1
 foam_purgeWrite=10
@@ -71,12 +71,6 @@ sed -i 's,^startFrom.*,startFrom    '"$foam_startFrom"';,' system/controlDict
 sed -i 's,^startTime.*,startTime    '"$foam_startTime"';,' system/controlDict
 sed -i 's,^endTime.*,endTime    '"$foam_endTime"';,' system/controlDict
 sed -i 's,^writeInterval.*,writeInterval    '"$foam_writeInterval"';,' system/controlDict
-sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
-
-#9. Changing OpenFOAM controlDict settings
-sed -i 's,^startFrom.*,startFrom    '"$foam_startFrom"';,' system/controlDict
-sed -i 's,^startTime.*,startTime    '"$foam_startTime"';,' system/controlDict
-sed -i 's,^endTime.*,endTime    '"$foam_endTime"';,' system/controlDict
 sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
 
 #10. Defining the solver

@@ -2,7 +2,8 @@
 #SBATCH --export=NONE
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
-#SBATCH --partition=copyq
+#@@#SBATCH --partition=copyq #In practise, this kind of jobs should be submitted to the copyq
+#SBATCG --partition=workq
  
 #1. Load the necessary modules
 module load singularity
@@ -15,7 +16,8 @@ theProvider=pawsey
 theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
  
 #3. Defining the case directory
-baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+#baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+baseWorkingDir=./run
 caseName=channel395
 caseDir=$baseWorkingDir/$caseName
 
@@ -29,12 +31,15 @@ else
 fi
 
 #5. Defining OpenFOAM controlDict settings for Pawsey Best Practices
+##5.1 Replacing writeFormat, runTimeModifiable and purgeRight settings
 foam_writeFormat="binary"
 sed -i 's,^writeFormat.*,writeFormat    '"$foam_writeFormat"';,' ./system/controlDict
 foam_runTimeModifiable="false"
 sed -i 's,^runTimeModifiable.*,runTimeModifiable    '"$foam_runTimeModifiable"';,' ./system/controlDict
 foam_purgeWrite=10
 sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' ./system/controlDict
+
+##5.2 Defining the use of collated fileHandler of output results 
 echo "OptimisationSwitches" >> ./system/controlDict
 echo "{" >> ./system/controlDict
 echo "   fileHandler collated;" >> ./system/controlDict
