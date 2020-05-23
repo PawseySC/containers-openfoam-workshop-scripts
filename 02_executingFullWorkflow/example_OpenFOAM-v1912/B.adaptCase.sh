@@ -2,8 +2,7 @@
 #SBATCH --export=NONE
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
-#@@#SBATCH --partition=copyq #In practise, this kind of jobs should be submitted to the copyq
-#SBATCG --partition=workq
+#SBATCH --partition=copyq #In practise, this kind of jobs should be submitted to the copyq
  
 #1. Load the necessary modules
 module load singularity

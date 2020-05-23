@@ -2,8 +2,7 @@
 #SBATCH --export=NONE
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
-#@@#SBATCH --partition=copyq #Ideally, you should be using the copyq for this kind of processes
-#SBATCH --partition=workq
+#SBATCH --partition=copyq #Ideally, you should be using the copyq for this kind of processes
  
 #1. Load the necessary modules
 module load singularity
@@ -31,7 +30,9 @@ caseDir=$baseWorkingDir/$caseName
 
 #4. Copy the tutorialCase to the workingDir
 if ! [ -d $caseDir ]; then
+   #Using the internal FOAM_TUTORIALS variable:
    #srun -n 1 -N 1 singularity exec $theImage bash -c 'cp -r $FOAM_TUTORIALS/'"$tutorialCase $caseDir"
+   #Or using the full internal path:
    srun -n 1 -N 1 singularity exec $theImage cp -r /opt/OpenFOAM/OpenFOAM-$theVersion/tutorials/$tutorialCase $caseDir
 else
    echo "The case=$caseDir already exists, no new copy has been performed"
