@@ -23,7 +23,7 @@ theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
 #3. Defining the case directory
 #baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/run
 #baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
-baseWorkingDir=./run
+baseWorkingDir=$SLURM_SUBMIT_DIR/run
 caseName=channel395
 caseDir=$baseWorkingDir/$caseName
 

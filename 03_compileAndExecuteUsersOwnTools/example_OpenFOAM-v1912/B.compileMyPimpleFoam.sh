@@ -1,6 +1,5 @@
 #!/bin/bash -l
 #SBATCH --ntasks=1
-#@@#SBATCH --mem=4G
 #SBATCH --ntasks-per-node=28
 #SBATCH --clusters=zeus
 #SBATCH --partition=workq
@@ -18,7 +17,8 @@ theProvider=pawsey
 theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
 
 #3. Going into the new solver directory and creating the logs directory
-projectUserDir=$MYGROUP/OpenFOAM/$USER-$theVersion/workshop/02_runningUsersOwnTools
+#projectUserDir=$MYGROUP/OpenFOAM/$USER-$theVersion/workshop/02_runningUsersOwnTools
+projectUserDir=$SLURM_SUBMIT_DIR/projectUserDir
 solverNew=myPimpleFoam
 if [ -d $projectUserDir/applications/$solverNew ]; then
    cd $projectUserDir/applications/$solverNew
@@ -32,26 +32,16 @@ if ! [ -d $logsDir ]; then
    mkdir -p $logsDir
 fi
 
-#4. Remove not needed stuff
-echo "Removing not needed stuff"
-rm -rf *DyMFoam SRFP* *.dep
-
-#5. Rename the source files and replace words inside
-echo "Renaming the source files"
-rename pimpleFoam myPimpleFoam *
-sed -i 's,pimpleFoam,myPimpleFoam,g' *.C
-sed -i 's,pimpleFoam,myPimpleFoam,g' *.H
-
-#6. Modify files inside the Make directory
-echo "Adapting files inside the Make directory"
-sed -i 's,pimpleFoam,myPimpleFoam,g' ./Make/files
-sed -i 's,FOAM_APPBIN,FOAM_USER_APPBIN,g' ./Make/files
-
-#7. Use the container to compile your own tool 
+#4. Use container's "wclean" to clean previously existing compilation 
+echo "Cleaning previous compilation"
 srun -n 1 -N 1 singularity exec -B $projectUserDir:/home/ofuser/OpenFOAM/ofuser-$theVersion $theImage wclean 2>&1 | tee $logsDir/wclean.$SLURM_JOBID
+
+#5. Use container's "wmake" (and compiler) to compile your own tool
+echo "Compiling myPimpleFoam"
 srun -n 1 -N 1 singularity exec -B $projectUserDir:/home/ofuser/OpenFOAM/ofuser-$theVersion $theImage wmake 2>&1 | tee $logsDir/wmake.$SLURM_JOBID
 
-#8. Very simple test of the new solver
+#6. Very simple test of the new solver
+echo "Performing a basic test"
 singularity exec -B $projectUserDir:/home/ofuser/OpenFOAM/ofuser-$theVersion $theImage myPimpleFoam -help | tee $logsDir/myPimpleFoam.$SLURM_JOBID
 
 #X. Final step

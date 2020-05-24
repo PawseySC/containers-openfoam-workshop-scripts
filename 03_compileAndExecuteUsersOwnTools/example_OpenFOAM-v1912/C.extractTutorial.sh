@@ -31,9 +31,9 @@ caseDir=$baseWorkingDir/$caseName
 #4. Copy the tutorialCase to the workingDir
 if ! [ -d $caseDir ]; then
    #Using the internal FOAM_TUTORIALS variable:
-   #srun -n 1 -N 1 singularity exec $theImage bash -c 'cp -r $FOAM_TUTORIALS/'"$tutorialCase $caseDir"
+   srun -n 1 -N 1 singularity exec $theImage bash -c 'cp -r $FOAM_TUTORIALS/'"$tutorialCase $caseDir"
    #Or using the full internal path:
-   srun -n 1 -N 1 singularity exec $theImage cp -r /opt/OpenFOAM/OpenFOAM-$theVersion/tutorials/$tutorialCase $caseDir
+   #srun -n 1 -N 1 singularity exec $theImage cp -r /opt/OpenFOAM/OpenFOAM-$theVersion/tutorials/$tutorialCase $caseDir
 else
    echo "The case=$caseDir already exists, no new copy has been performed"
 fi

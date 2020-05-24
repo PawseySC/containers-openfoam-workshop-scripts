@@ -1,9 +1,9 @@
 #!/bin/bash -l
 #SBATCH --ntasks=4
-#@@#SBATCH --mem=4G
-#@@#SBATCH --mem=64G
-#@@#SBATCH --ntasks-per-node=28
-#@@#SBATCH --cluster=zeus
+#SBATCH --mem=16G
+#SBATCH --ntasks-per-node=28
+#SBATCH --cluster=zeus
+#@@#SBATCH --mem=60G
 #@@#SBATCH --ntasks-per-node=24
 #@@#SBATCH --cluster=magnus
 #SBATCH --partition=workq
@@ -19,14 +19,11 @@ theContainerBaseName=openfoam
 theVersion=v1912
 theProvider=pawsey
 theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
-
-#3. Defining the projectUserDir to be binded to the path of WM_PROJECT_USER_DIR
-projectUserDir=$MYGROUP/OpenFOAM/$USER-$theVersion/workshop/02_runningUsersOwnTools
-insideProjectUserDir=$(singularity exec $theImage bash -c 'echo $WM_PROJECT_USER_DIR')
-
+ 
 #3. Defining the case directory
 #baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/run
-baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+#baseWorkingDir=$MYSCRATCH/OpenFOAM/$USER-$theVersion/workshop/01_usingOpenFOAMContainers/run
+baseWorkingDir=$SLURM_SUBMIT_DIR/run
 caseName=channel395
 caseDir=$baseWorkingDir/$caseName
 
@@ -65,7 +62,7 @@ foam_startFrom=startTime
 #foam_startFrom=latestTime
 foam_startTime=0
 #foam_startTime=15
-foam_endTime=15
+foam_endTime=10
 #foam_endTime=30
 foam_writeInterval=1
 foam_purgeWrite=10
@@ -77,18 +74,15 @@ sed -i 's,^endTime.*,endTime    '"$foam_endTime"';,' system/controlDict
 sed -i 's,^writeInterval.*,writeInterval    '"$foam_writeInterval"';,' system/controlDict
 sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
 
-#9. Changing OpenFOAM controlDict settings
-sed -i 's,^startFrom.*,startFrom    '"$foam_startFrom"';,' system/controlDict
-sed -i 's,^startTime.*,startTime    '"$foam_startTime"';,' system/controlDict
-sed -i 's,^endTime.*,endTime    '"$foam_endTime"';,' system/controlDict
-sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
-
 #10. Defining the solver
 of_solver=myPimpleFoam
 
-#11. Execute the case 
+#11. Defining the projectUserDir to be mounted into the path of the internal WM_PROJECT_USER_DIR
+projectUserDir=$SLURM_SUBMIT_DIR/projectUserDir
+
+#12. Execute the case 
 echo "About to execute the case"
-srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES singularity exec -B $projectUserDir:$insideProjectUserDir $theImage $of_solver -parallel 2>&1 | tee $logsDir/log.$theSolver.$SLURM_JOBID
+srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES singularity exec -B $projectUserDir:/home/ofuser/OpenFOAM/ofuser-$theVersion $theImage $of_solver -parallel 2>&1 | tee $logsDir/log.$theSolver.$SLURM_JOBID
 echo "Execution finished"
 
 #X. Final step
