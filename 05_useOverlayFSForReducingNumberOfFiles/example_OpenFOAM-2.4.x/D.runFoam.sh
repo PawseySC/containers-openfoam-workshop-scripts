@@ -1,26 +1,17 @@
 #!/bin/bash -l
 #SBATCH --ntasks=5
-#@@#SBATCH --ntasks-per-node=28
-#@@#SBATCH --cluster=zeus
+#SBATCH --mem=16G
+#SBATCH --ntasks-per-node=28
+#SBATCH --cluster=zeus
 #@@#SBATCH --ntasks-per-node=24
 #@@#SBATCH --cluster=magnus
 #SBATCH --partition=workq
 #SBATCH --time=0:10:00
 #SBATCH --export=none
 
-#0. Initial settings:
-unset XDG_RUNTIME_DIR #To avoid some annoying warnings when using some containers
-
 #1. Loading the container settings, case settings and auxiliary functions (order is important)
 source $SLURM_SUBMIT_DIR/imageSettingsSingularity.sh
 source $SLURM_SUBMIT_DIR/caseSettingsFoam.sh
-overlayFunctionsScript=$auxScriptsDir/ofContainersOverlayFunctions.sh
-if [ -f "$overlayFunctionsScript" ]; then 
-   source $overlayFunctionsScript
-else
-   echo "The script for the auxiliary functions = $auxFucntionsScript was not found"
-   echo "Exiting"; exit 1
-fi
 
 #2. Going into the case and creating the logs dir
 if [ -d $caseDir ]; then
@@ -52,12 +43,13 @@ fi
 foam_startFrom=startTime
 #foam_startFrom=latestTime
 foam_startTime=0
-#foam_startTime=30
-#foam_endTime=30
-foam_endTime=40
+#foam_startTime=10
+foam_endTime=10
+#foam_endTime=20
 #foam_endTime=100
-foam_writeInterval=10
-foam_purgeWrite=0
+foam_writeInterval=1
+foam_purgeWrite=0 #Just for testing in this exercise. In reality this should have a reasonable value if possible
+#foam_purgeWrite=10 #Just 10 times will be preserved
 
 #6. Changing OpenFOAM controlDict settings
 sed -i 's,^startFrom.*,startFrom    '"$foam_startFrom"';,' system/controlDict
@@ -70,31 +62,37 @@ sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
 #These links and directories will be recognized by each mpi instance of the container
 #(Initially these links will appear broken as they are pointing towards the interior of the overlay* files.
 # They will only be recognized within the containers)
-pointToOverlay $insideDir $foam_numberOfSubdomains;success=$? #Calling function to point towards the interior
-if [ $success -ne 0 ]; then
+#Removing any softling
+echo "First removing existing soft links"
+linkList=$(find . -type l -name "proc*")
+for ll in $linkList; do
+   rm $ll
+done
+
+#Creating the soft links (will initially appear as broken)
+echo "Creating the soft links to point towards the interior of the overlay files"
+for ii in $(seq 0 $(( foam_numberOfSubdomains -1 ))); do
+   echo "Linking to $insideDir/processor${ii} in overlay${ii}"
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s $insideDir/processor${ii} processor${ii} &
+done
+wait
+
+#Testing:
+srun -n 1 -N 1 singularity exec --overlay overlay0 $theImage ls -dlh processor0
+success=$?
+if [ $success -ne 0 ]; then 
    echo "Failed creating the soft links"
    echo "Exiting";exit 1
 fi
 
-#8. Execute the case 
+#8. Execute the case using the softlinks to write inside the overlays
 echo "About to execute the case"
 srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c 'singularity exec --overlay overlay${SLURM_PROCID} '"$theImage"' pimpleFoam -parallel 2>&1' | tee $logsDir/log.pimpleFoam.$SLURM_JOBID
 echo "Execution finished"
 
-#9. Transfer a few result times available inside the OverlayFS towards the bak.procesors directories
-reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function below
-unset arrayReconstruct #This globaal variable will be re-created in the function below
-generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
-if [ $success -ne 0 ]; then
-   echo "Failed creating the arrayReconstruct"
-   echo "Exiting";exit 1
-fi
-replace="false"
-copyIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into bak.processor*
-if [ $success -ne 0 ]; then
-   echo "Failed transferring files into bak.processor* directories"
-   echo "Exiting";exit 1
-fi
+#9. List the existing times inside the overlays 
+echo "Listing the available times inside overlay0"
+srun -n 1 -N 1 singularity exec --overlay overlay0 $theImage ls -lat processor0/
 
 #X. Final step
 echo "Script done"

@@ -1,14 +1,11 @@
 #!/bin/bash -l
 #SBATCH --ntasks=1
-#@@#SBATCH --mem=64G
-#@@#SBATCH --ntasks-per-node=28
-#@@#SBATCH --clusters=zeus
+#SBATCH --mem=4G
+#SBATCH --ntasks-per-node=28
+#SBATCH --clusters=zeus
 #SBATCH --partition=workq
 #SBATCH --time=0:10:00
 #SBATCH --export=none
-
-#0. Initial settings:
-unset XDG_RUNTIME_DIR #To avoid some annoying warnings when using some containers
 
 #1. Loading the container settings (order is important)
 source $SLURM_SUBMIT_DIR/imageSettingsSingularity.sh
@@ -17,7 +14,7 @@ overlayFunctionsScript=$auxScriptsDir/ofContainersOverlayFunctions.sh
 if [ -f "$overlayFunctionsScript" ]; then 
    source $overlayFunctionsScript
 else
-   echo "The script for the auxiliary functions = $auxFucntionsScript was not found"
+   echo "The script for the functions to manage OverlaFS files: $overlayFunctionsScript was not found"
    echo "Exiting"; exit 1
 fi
 

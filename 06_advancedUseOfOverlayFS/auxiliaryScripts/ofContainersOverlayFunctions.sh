@@ -463,8 +463,9 @@ for ll in $linkList; do
     rm $ll
 done
 
-#Creating the broken soft links
+#Creating the soft links (will initially appear as broken)
 echo "Creating the soft links to point towards the interior of the overlay files"
+local ii=0
 for ii in $(seq 0 $(( nDomains -1 ))); do
     echo "Linking to $insideDir/processor${ii} in overlay${ii}"
     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s $insideDir/processor${ii} processor${ii} &

@@ -1,8 +1,8 @@
 #!/bin/bash -l
 #SBATCH --ntasks=1
-#@@#SBATCH --mem=32G
-#@@#SBATCH --ntasks-per-node=28
-#@@#SBATCH --clusters=zeus
+#SBATCH --mem=4G
+#SBATCH --ntasks-per-node=28
+#SBATCH --clusters=zeus
 #SBATCH --time=0:10:00
 #SBATCH --partition=workq
 #SBATCH --export=none
@@ -17,7 +17,7 @@ overlayFunctionsScript=$auxScriptsDir/ofContainersOverlayFunctions.sh
 if [ -f "$overlayFunctionsScript" ]; then 
    source $overlayFunctionsScript
 else
-   echo "The script for the auxiliary functions = $auxFucntionsScript was not found"
+   echo "The script for the functions to manage OverlaFS files: $overlayFunctionsScript was not found"
    echo "Exiting"; exit 1
 fi
 

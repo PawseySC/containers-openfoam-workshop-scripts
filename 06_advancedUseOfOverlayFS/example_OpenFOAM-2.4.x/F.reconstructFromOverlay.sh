@@ -1,8 +1,8 @@
 #!/bin/bash -l
-#SBATCH --ntasks=7
-#@@#SBATCH --mem=32G
-#@@#SBATCH --ntasks-per-node=28
-#@@#SBATCH --clusters=zeus
+#SBATCH --ntasks=4
+#SBATCH --mem=4G
+#SBATCH --ntasks-per-node=28
+#SBATCH --clusters=zeus
 #SBATCH --time=0:10:00
 #SBATCH --partition=workq
 #SBATCH --export=none
@@ -17,7 +17,7 @@ overlayFunctionsScript=$auxScriptsDir/ofContainersOverlayFunctions.sh
 if [ -f "$overlayFunctionsScript" ]; then 
    source $overlayFunctionsScript
 else
-   echo "The script for the auxiliary functions = $auxFucntionsScript was not found"
+   echo "The script for the functions to manage OverlaFS files: $overlayFunctionsScript was not found"
    echo "Exiting"; exit 1
 fi
 
@@ -42,7 +42,7 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="-1"
 #reconstructTimes="20"
 #reconstructTimes="50,60,70,80,90"
-reconstructTimes="30.0:50.5"
+reconstructTimes="5.5:12.5"
 unset arrayReconstruct #This global variable will be re-created in the function below
 generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
