@@ -1,0 +1,116 @@
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+# 0. Initial main definintion
+# Defining the base container to build from
+# In this case: mpich 3.1.4 and ubuntu 16.04; MPICH is needed for crays
+FROM pawsey/mpich-base:3.1.4_ubuntu16.04
+
+LABEL maintainer="Alexis.Espinosa@pawsey.org.au"
+#OpenFOAM version to install
+ARG OFVERSION="2.4.x"
+#Using bash from now on
+SHELL ["/bin/bash", "-c"]
+
+
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+# I. Installing additional tools useful for interactive sessions
+RUN apt-get update -qq\
+ &&  apt-get -y --no-install-recommends install \
+            vim time\
+            cron gosu \
+            bc \
+ && apt-get clean all \
+ && rm -r /var/lib/apt/lists/*
+
+
+
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+# II. Setting a user for interactive sessions (with Docker) and passwords
+#The passwords will be the $OFVERSION defined above
+#Give a password to root.
+#Examples from here:
+#https://stackoverflow.com/questions/714915/using-the-passwd-command-from-within-a-shell-script
+RUN echo "root:${OFVERSION}" | chpasswd
+
+
+#Create the ofuser with the same password (all the *USER* environmental variables will point towards this user)
+#Recent native developers' containers are not using this "ofuser" anymore, although it is still useful to have it
+#for pawsey purposes where /group needs to be used as the place for the *USER* variables. Then, /group directory
+#will be mounted into the ofuser dir whenever own compiled tools are used
+RUN groupadd -g 999 ofuser \
+ && useradd -r -m -u 999 -g ofuser ofuser
+RUN echo "ofuser:${OFVERSION}" | chpasswd
+
+
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+# III. INSTALLING OPENFOAM.
+#This section is for installing OpenFOAM
+#Will follow PARTIALLY the official installation instructions:
+#https://openfoam.org/download/2-4-0-source/
+#
+#Will follow PARTIALLY the instructions for OpenFOAM-2.4.x  available in the wiki:
+#https://openfoamwiki.net/index.php/Installation/Linux/OpenFOAM-2.4.x/Ubuntu#Ubuntu_16.04
+#
+#Then, Will follow a combination of both
+#(Also checking wiki for OpenFOAM-2.4.0)
+#
+#Where recipe deviates from the instructions mentioned above, comments from the maintainer are labelled as: AEG
+
+#...........
+#Definition of the installation directory within the container
+ARG OFINSTDIR=/opt/OpenFOAM
+ARG OFUSERDIR=/home/ofuser/OpenFOAM
+WORKDIR $OFINSTDIR
+
+#...........
+#Step 1.
+#Install necessary packages
+#
+#A warning may appear:
+#debconf: delaying package configuration, since apt-utils is not installed
+#But seems to be a bug:
+#https://github.com/phusion/baseimage-docker/issues/319
+#But harmless.
+RUN apt-get update -qq\
+ &&  apt-get -y --no-install-recommends --no-install-suggests install \
+#@@@#   build-essential\
+   flex bison git-core cmake zlib1g-dev \
+#@@@#   libboost-system-dev libboost-thread-dev \
+#@@@##AEG:No OpenMPI because MPICH will be used (installed in the parent FROM container)
+#@@@##AEG:NoOpenMPI:   libopenmpi-dev openmpi-bin \
+#@@@##AEG:(using libncurses-dev, as in official instructions, and not libncurses5-dev, as in wiki)
+#@@@#   gnuplot libreadline-dev libncurses-dev libxt-dev \
+#@@@#   qt4-dev-tools libqt4-dev libqt4-opengl-dev \ 
+#@@@#   freeglut3-dev libqtwebkit-dev \
+#@@@##AEG:No scotch because it installs openmpi which later messes up with MPICH
+#@@@##    Therefore, ThirdParty scotch is the one to be installed and used by openfoam.
+#@@@##AEG:NoScotch:   libscotch-dev \
+#@@@#   libcgal-dev \
+#@@@##AEG:These libraries are needed for CGAL (system and third party) (if needed, change libgmp-dev for libgmp3-dev):
+#@@@#   libgmp-dev libmpfr-dev\
+#@@@##AEG: Some more suggestions from the wiki instructions:
+#@@@#   python python-dev \
+#@@@#   libglu1-mesa-dev \
+#@@@##AEG:I found the following was needed to install  FlexLexer.h
+#@@@#   libfl-dev \
+ && apt-get clean all \
+ && rm -r /var/lib/apt/lists/*
+
+#...........
+#Step 2. Download
+#Change to the installation dir, clone OpenFOAM directories
+ARG OFVERSIONGIT=$OFVERSION
+WORKDIR $OFINSTDIR
+#Try git or https protocol:
+##RUN git clone https://github.com/OpenFOAM/OpenFOAM-${OFVERSIONGIT}.git \
+## && git clone https://github.com/OpenFOAM/ThirdParty-${OFVERSIONGIT}.git
+
+RUN git clone git://github.com/OpenFOAM/OpenFOAM-${OFVERSIONGIT}.git \
+ && git clone git://github.com/OpenFOAM/ThirdParty-${OFVERSIONGIT}.git
