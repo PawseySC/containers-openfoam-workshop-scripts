@@ -38,6 +38,7 @@ fi
 foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict | tr -dc '0-9')
 
 #4. Create the reconstruction array, intended times to be reconstructed are set with the reconstructTimes var
+#These formats are the only accepted by function "generateReconstructArray" (check the function definition for further information)
 #reconstructTimes="all"
 #reconstructTimes="-1"
 #reconstructTimes="20"
