@@ -38,11 +38,12 @@ fi
 foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict | tr -dc '0-9')
 
 #4. Create the reconstruction array, intended times to be reconstructed are set with the reconstructTimes var
+#These formats are the only accepted by function "generateReconstructArray" (check the function definition for further information)
 reconstructTimes="all"
 #reconstructTimes="-2"
 #reconstructTimes="60"
 #reconstructTimes="50,60,70,80,90"
-#reconstructTimes="29.5:50.5"
+#reconstructTimes="0:1"
 unset arrayReconstruct #This global variable will be re-created in the function below
 generateReconstructArray "$reconstructTimes" "bak";success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
@@ -57,12 +58,7 @@ if [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
-#6. Reconstruct times One by One to have more control of successful reconstructions.
-#   Successful reconstructions will have a dummy file ".reconstructDone" within the reconstructed directory
-#   After reconstruction, time directories will be removed from bak.processor*, unless indicated in the keepArray
-
-
-## 6.1 Generate a list times in bak.processor directories to be preserved and not removed after reconstruction
+#6. Generate a list of time directories in bak.processor* to be preserved decomposed and not removed after reconstruction
 ls -dt bak.processor0/[0-9]* | sed "s,bak.processor0/,," > bakTimes.$SLURM_JOBID
 sort -n bakTimes.$SLURM_JOBID -o bakTimesSorted.$SLURM_JOBID
 rm bakTimes.$SLURM_JOBID
@@ -93,26 +89,70 @@ fi
 echo "All times to be preserved in bak.processor* are:"
 echo "${keepTimesArr[@]}"
 
-## 6.2 Reconstruct and remove times after reconstruction from bak.processors* if not in the keepTimesArr
+#7. Check for already reconstructed cases and build the `-time $timeString` argument for the reconstructPar tool
+timeString=""
+countRec=0
+realToDoReconstruct[$countRec]=-1
 for ii in ${!arrayReconstruct[@]}; do
+   correctReconstruct[$ii]="true" #Initialising this array to be used in the following subsections (9.)
    timeHere=${arrayReconstruct[ii]}
    if [ -f ${timeHere}/.reconstructDone ]; then
       echo "Time ${timeHere} has already been reconstructed. No reconstruction will be performed"
    else
-      echo "Time ${timeHere} will be reconstructed"
+      timeString="${timeString},${timeHere}"
+      realToDoReconstruct[$countRec]=$timeHere
+      (( countRec++ ))
+   fi
+done
+echo "Times to be reconstructed are:"
+echo "${timeString}"
 
-      ##6.2.1 Execute the reconstruction
-      echo "Start reconstruction"
-      srun -n 1 -N 1 singularity exec $theImage reconstructPar -time ${timeHere} 2>&1 | tee $logsDir/log.reconstructPar.$SLURM_JOBID.${timeHere} 
-      if grep -i 'error\|exiting' $logsDir/log.reconstructPar.$SLURM_JOBID.${timeHere}; then
-         echo "The reconstruction of time ${timeHere} failed"
-      else
+#8. Reconstruct all available times in a single batch.
+if [ $countRec -gt 0 ]; then
+   echo "Start reconstruction"
+   srun -n 1 -N 1 singularity exec $theImage reconstructPar -time ${timeString} 2>&1 | tee $logsDir/log.reconstructPar.$SLURM_JOBID.all
+else
+   echo "No additional reconstruction needed"
+fi
+
+#9. Mark successfully reconstructed times with the "flag" file: .reconstructDone, and remove the decomposed time results
+for ii in ${!arrayReconstruct[@]}; do
+   timeHere=${arrayReconstruct[ii]}
+   indexInRealTodo=$(getIndex "${timeHere}" "${realToDoReconstruct[@]}")
+   if [ $indexInRealTodo -ne -1 ]; then
+      ##9.1 Check if reconstruction was successful by looking for errors in the log file
+      checkOn="false"
+      while IFS= read -r line; do
+         if [ "${checkOn}" = "true" ]; then
+            if [[ "${line}" == *"error"* ]] || [[ $line == *"Error"* ]] || [[ $line == *"ERROR"* ]]  ; then
+               echo "Error in reconstruction:"
+               echo "The reconstruction of time ${timeHere} failed"
+               correctReconstruct[$ii]="false"
+               break
+            elif [[ "${line}" == *"Time"* ]]; then
+               checkOn="false"
+               break
+            elif [[ "${line}" == *"End"* ]]; then
+               checkOn="false"
+               break
+            fi
+         else
+            if [ "${line}" = "Time = $timeHere" ]; then
+                echo "Starting check for $timeHere"
+                checkOn="true"
+            fi
+         fi
+      done < $logsDir/log.reconstructPar.$SLURM_JOBID.all
+   
+      ##9.2 If reconstruction was correct, mark the reconstructed folder
+      if [ "${correctReconstruct[ii]}" = "true" ]; then
          touch ${timeHere}/.reconstructDone
          echo "Reconstruction finished, and file ${timeHere}/.reconstructionDone created."
+      else
+         echo "Check why Time ${timeHere} failed in reconstruction"
       fi
    fi
-
-   ##6.2.2 Remove the files from the bak.processor* directories 
+   ##9.3 Deleting decomposed results, except those indicated to be kept
    indexKeep=$(getIndex "${timeHere}" "${keepTimesArr[@]}")
    if [ $indexKeep -eq -1 ]; then
       echo "Removing time ${timeHere} in the bak.processor* directories"
@@ -128,8 +168,6 @@ for ii in ${!arrayReconstruct[@]}; do
          fi
       done
       wait
-   else
-      echo "Time ${timeHere} in the bak.processor* directories will be preserved"
    fi
 done
 

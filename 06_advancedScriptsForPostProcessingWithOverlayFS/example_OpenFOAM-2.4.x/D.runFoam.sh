@@ -54,10 +54,11 @@ foam_startFrom=startTime
 foam_startTime=0
 #foam_startTime=10
 #foam_endTime=10
-foam_endTime=20
+#foam_endTime=20
+foam_endTime=40
 #foam_endTime=100
-foam_writeInterval=1
-foam_purgeWrite=0 #For the purposes of the testing, but ideally should be a reasonable number
+foam_writeInterval=1 #For the purposes of this test, but ideally should be a reasonable writing frequency
+foam_purgeWrite=0 #For the purposes of this test, but ideally should be a reasonable number
 #foam_purgeWrite=10 #Only 10 time directories will be kept
 
 #6. Changing OpenFOAM controlDict settings
@@ -83,7 +84,7 @@ srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c 'singularity exec --overla
 echo "Execution finished"
 
 #9. Transfer a few result times available inside the OverlayFS towards the bak.procesors directories
-reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function below
+reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function "generateReconstructArray"
 unset arrayReconstruct #This globaal variable will be re-created in the function below
 generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
