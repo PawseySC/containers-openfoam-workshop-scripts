@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --ntasks=4 #Independent from the number of subdomains
+#SBATCH --ntasks=4 #Several tasks will be used for copying files. (Independent from the numberOfSubdomains)
 #SBATCH --mem=4G
 #SBATCH --ntasks-per-node=28
 #SBATCH --clusters=zeus
@@ -27,7 +27,7 @@ fi
 #3. Reading OpenFOAM decomposeParDict settings
 foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict | tr -dc '0-9')
 
-#4. Transfer the content of the overlayFS into the bak.processor* directories using the softlinks processor*
+#4. Transfer the content of the overlayFS into the bak.processor* directories
 reconstructionTime=10
 echo "Copying the times to reconstruct from the overlays into bak.processor*"
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do

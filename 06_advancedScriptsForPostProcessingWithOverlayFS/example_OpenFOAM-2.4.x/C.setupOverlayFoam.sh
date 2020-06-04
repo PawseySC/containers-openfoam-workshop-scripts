@@ -71,27 +71,22 @@ elif [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
-#8. Creating soft links towards directories inside the overlayFS files
-#These links and directories will be recognized by each mpi instance of the container
-#(Initially these links will appear broken as they are pointing towards the interior of the overlay* files.
-# They will only be recognized within the containers)
-pointToOverlay $insideDir $foam_numberOfSubdomains;success=$? #Calling function to point towards the interior
-if [ $success -ne 0 ]; then 
-   echo "Failed creating the soft links"
-   echo "Exiting";exit 1
-fi
-
-#9. Transfer the content of the bak.processor* directories into the overlayFS using the softlinks processor*
+#8. Transfer the content of the bak.processor* directories into the overlayFS
 echo "Copying OpenFOAM files inside bak.processor* into the overlays"
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
     echo "Writing into overlay${ii}"
-    srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} $theImage bash -c "cp -r bak.processor${ii}/* processor${ii}/" &
+    srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} $theImage cp -r bak.processor${ii}/* $insideDir/processor${ii}/ &
 done
 wait
+
+#9. List the content of directories inside the overlay* files
+echo "Listing the content in overlay0 $insideDir/processor0"
+srun -n 1 -N 1 singularity exec --overlay overlay0 $theImage ls -lat $insideDir/processor0/
 
 #10. Mark the initial conditions time directory as already fully reconstructed
 echo "Marking the time directory \"0\" as fully reconstructed"
 touch 0/.reconstructDone
+
 
 #X. Final step
 echo "Script done"

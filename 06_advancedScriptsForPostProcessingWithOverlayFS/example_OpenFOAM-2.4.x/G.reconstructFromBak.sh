@@ -45,7 +45,7 @@ reconstructTimes="all"
 #reconstructTimes="50,60,70,80,90"
 #reconstructTimes="0:1"
 unset arrayReconstruct #This global variable will be re-created in the function below
-generateReconstructArray "$reconstructTimes" "bak";success=$? #Calling fucntion to generate "arrayReconstruct"
+generateReconstructArray "$reconstructTimes" "bak";success=$? #Calling function to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
    echo "Failed creating the arrayReconstruct"
    echo "Exiting";exit 1

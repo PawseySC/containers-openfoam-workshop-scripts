@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --ntasks=4 #This number is independent of the numberOfSubdomains
+#SBATCH --ntasks=4 #Several tasks will be used for copying files. (Independent from the numberOfSubdomains)
 #SBATCH --mem=4G
 #SBATCH --ntasks-per-node=28
 #SBATCH --clusters=zeus

@@ -43,7 +43,7 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="-1"
 #reconstructTimes="20"
 #reconstructTimes="50,60,70,80,90"
-reconstructTimes="15:16"
+reconstructTimes="10:20"
 unset arrayReconstruct #This global variable will be re-created in the function below
 generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
@@ -97,9 +97,8 @@ for ii in ${!realToDoReconstruct[@]}; do
       echo "Warning: current copy would try to transfer $countRec times from the overlay files"
       echo "This script is set to allow maxTimeTransfersFromOverlays=$maxTimeTransfersFromOverlays"
       echo "The limit has been reached. No more transfers will be performed."
-      echo "We recommend you to postprocess the already transferred results first before trying to copy more results into the host file system"
-      echo "PS. (Or you can execute this script again or change maxTimeTransfersFromOverlay parameter)"
-      echo "(Remember that the goal of all this effort is to keep a low number of files in the host file system.)"
+      echo "We recommend you to postprocess (reconstruct) the already transferred results first before trying again to copy more results into the host file system"
+      echo "Remember that the goal of all this effort is to keep a low number of files in the host file system."
       echo "Exiting"; exit 0
    fi
    timeHere=${realToDoReconstruct[ii]}

@@ -266,7 +266,7 @@ function generateReconstructArray {
 #This function receives the following arguments:
 local reconstructTimes="$1" #the indication of the reconstruct times we are looking for
 local whatSource="$2" #If the value is "bak", then results in bak.processors* will be used.
-                     #Otherwise, it ndicates where results are being created inside the overlay* files
+                     #Otherwise, it indicates where results are being created inside the overlay* files
 #
 #Examples of the 5 accepted formats for the reconstructTimes parameter are:
 #reconstructTimes="all" #Means, all the available times will be included in the array generated

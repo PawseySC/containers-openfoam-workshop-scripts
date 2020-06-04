@@ -84,18 +84,22 @@ srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c 'singularity exec --overla
 echo "Execution finished"
 
 #9. Transfer a few result times available inside the OverlayFS towards the bak.procesors directories
-reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function "generateReconstructArray"
-unset arrayReconstruct #This globaal variable will be re-created in the function below
-generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
-if [ $success -ne 0 ]; then
-   echo "Failed creating the arrayReconstruct"
-   echo "Exiting";exit 1
-fi
-replace="false"
-copyIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into bak.processor*
-if [ $success -ne 0 ]; then
-   echo "Failed transferring files into bak.processor* directories"
-   echo "Exiting";exit 1
+#reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function "generateReconstructArray"
+if [ -z "$reconstructTimes" ]; then
+   echo "No copy of times from the overlays to the host will be performed at this point"
+else
+   unset arrayReconstruct #This global variable will be re-created in the function below
+   generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
+   if [ $success -ne 0 ]; then
+      echo "Failed creating the arrayReconstruct"
+      echo "Exiting";exit 1
+   fi
+   replace="false"
+   copyIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into bak.processor*
+   if [ $success -ne 0 ]; then
+      echo "Failed transferring files into bak.processor* directories"
+      echo "Exiting";exit 1
+   fi
 fi
 
 #X. Final step
