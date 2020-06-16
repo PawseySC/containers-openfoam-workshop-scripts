@@ -79,14 +79,13 @@ for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
 done
 wait
 
-#9. List the content of directories inside the overlay* files
-echo "Listing the content in overlay0 $insideDir/processor0"
-srun -n 1 -N 1 singularity exec --overlay overlay0 $theImage ls -lat $insideDir/processor0/
-
-#10. Mark the initial conditions time directory as already fully reconstructed
+#9. Mark the initial conditions time directory as already fully reconstructed
 echo "Marking the time directory \"0\" as fully reconstructed"
 touch 0/.reconstructDone
 
+#10. List the content of directories inside the overlay* files
+echo "Listing the content in overlay0 $insideDir/processor0"
+srun -n 1 -N 1 singularity exec --overlay overlay0 $theImage ls -lat $insideDir/processor0/
 
 #X. Final step
 echo "Script done"

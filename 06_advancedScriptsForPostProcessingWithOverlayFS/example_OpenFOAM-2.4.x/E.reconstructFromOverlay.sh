@@ -58,7 +58,8 @@ if [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
-#6. Generate a list of time directories in bak.processor* to be preserved decomposed and not removed after reconstruction
+#6. Generate a list of time directories in bak.processor* to be preserved and not removed after reconstruction
+#   (The earlier and latest times will be preserved)
 ls -dt bak.processor0/[0-9]* | sed "s,bak.processor0/,," > bakTimes.$SLURM_JOBID
 sort -n bakTimes.$SLURM_JOBID -o bakTimesSorted.$SLURM_JOBID
 rm bakTimes.$SLURM_JOBID
@@ -101,7 +102,7 @@ fi
 echo "All times to be preserved in bak.processor* are:"
 echo "${keepTimesArr[@]}"
 
-#7. Check for already reconstructed cases and build the `-time $timeString` argument for the reconstructPar tool
+#7. Check for already reconstructed cases and set the `-time $timeString` argument for the reconstructPar tool
 countRec=0
 realToDoReconstruct[$countRec]=-1
 for ii in ${!arrayReconstruct[@]}; do
