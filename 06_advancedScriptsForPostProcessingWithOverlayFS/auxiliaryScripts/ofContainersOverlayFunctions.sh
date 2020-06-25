@@ -2,20 +2,83 @@
 
 #---------------------------------------------------------------
 #---------------------------------------------------------------
-function copyIntoBak {
+function copyIntoOverlayII {
+#Copy the source into the overlay* files
+#
+#This function receives No Global variables:
+#
+#This function receives the following arguments:
+local sourceString=$1
+local destinyString=$2
+local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
+local replace=$4 #Replace files/directories if they already exist? "true" or "false"
+#
+#IMPORTANT:#It needs to be called like:
+#copyIntoOverlayII "$sourceStringOrg" "$destinyStringOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg"
+#The source and destiny strings my contain the for counter '${ii}', but it needs to be defined with single quotes
+#to avoid evaluation. The same for wildcards as '*'
+#Evaluation is performed within the for loop inside the function
+#For example,
+#copyIntoOverlayII 'bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true"
+#
+#No global variables are created back
+#
+#The function returns 0 if successful and other if the test failed 
+#(return value should be catch with $? immediately after usage)
+#
+#...............................................................
+local cpOptions=""
+if [ "$replace" == "false" ]; then
+   cpOptions="-r"
+else
+   cpOptions="-rf"
+fi
+echo "replace=$replace, then using the follwing options for the copy:cp $cpOptions"
+
+echo "Copying files into the overlays"
+local ii=0
+local rnd=$RANDOM
+for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
+   local name=$rnd.$ii
+   echo "Copy $ii: Writing into overlay${ii}, job-name=$name"
+   eval sourceStringII=$sourceString
+   echo "sourceStringII=$sourceStringII"
+   eval destinyStringII=$destinyString
+   echo "destinyStringII=$destinyStringII"
+   srun -n 1 -N 1 --job-name=$name --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} docker://ubuntu:18.04 cp $cpOptions $sourceStringII $destinyStringII &
+done
+wait
+for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
+   local name=$rnd.$ii
+   local res=$(sacct --jobs=$SLURM_JOB_ID --format=JobID,JobName,ExitCode | grep "$name" | awk '{ print $3 }')
+   if [ "$res" == "0:0" ]; then
+      echo "Copy $ii was successful. Exit status of srun job $name = $res"
+   else
+      echo "Copy $ii was NOT successful. Exit status of srun job $name = $res"
+      return -1
+   fi
+done
+return 0
+}
+#End ===========================================================
+
+
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+function copyResultsIntoBak {
 #Copy the indicated Time results from the interior of overlay* files into the bak.procesors* directories
 #
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
 local insideDir=$1 #the root directory where results are going to be written inside the overlays
-local nDomains=$2 #the number of subdomains in the OpenFOAM decomposition
-local replace=$3 #Replace folders if they already exist? "yes" or "no"
+local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
+local replace=$3 #Replace folders if they already exist? "true" or "false"
 shift 3
 local arrayHere=("$@") #has the array of the times to be transferred
 #
 #IMPORTANT:#It needs to be called like:
-#copyIntoBak "$insideDirOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg" "${arrayOrg[@]}"
+#copyResultsIntoBak "$insideDirOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg" "${arrayOrg[@]}"
 #IMPORTANT:Note that the original array from the calling scritpt needs to be expanded as an argument
 #
 #No global variables are created back
@@ -25,7 +88,7 @@ local arrayHere=("$@") #has the array of the times to be transferred
 #
 #...............................................................
 echo "Copying files from the overlays into the bak.processors directories"
-local jj
+local jj=0
 for jj in ${arrayHere[@]}; do
    #Checking if the folder already exists in bak.processor0 
    local proceed="true"
@@ -42,7 +105,7 @@ for jj in ${arrayHere[@]}; do
    if [ "$proceed" == "true" ]; then
       echo "Copying time ${jj} to all the bak.procesors"
       local ii
-      for ii in $(seq 0 $((nDomains -1))); do
+      for ii in $(seq 0 $((foam_numberOfSubdomains -1))); do
          echo "Writing in bak.processor${ii}"
          srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bak.processor${ii}/ &
       done
@@ -71,7 +134,7 @@ function createInsideProcessorDirs {
 #
 #This function receives the following arguments:
 local insideDir=$1 #the root directory where results are going to be written inside the overlays
-local nDomains=$2 #the number of subdomains in the OpenFOAM decomposition
+local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
 #
 #No global variables are created back
 #
@@ -92,7 +155,7 @@ echo "Directory $insideDir/processor0 does not exist. Then will proceed with cre
 #Creating the directories inside
 echo "Creating the directories inside the overlays"
 local ii
-for ii in $(seq 0 $(( nDomains - 1 ))); do
+for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
    echo "Creating processor${ii} inside overlay${ii}"
    srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} docker://ubuntu:18.04 mkdir -p $insideDir/processor${ii} &
 done
@@ -407,7 +470,7 @@ function pointToBak {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local nDomains=$1 #the number of subdomains in the OpenFOAM decomposition
+local foam_numberOfSubdomains=$1 #the number of subdomains in the OpenFOAM decomposition
 #
 #No global variables are created back
 #
@@ -424,7 +487,7 @@ done
 
 #Creating the broken soft links
 echo "Creating the soft links to point towards the bak.processor* directories"
-for ii in $(seq 0 $(( nDomains -1 ))); do
+for ii in $(seq 0 $(( foam_numberOfSubdomains -1 ))); do
     echo "Linking to bak.procesor${ii}"
     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s bak.processor${ii} processor${ii} &
 done
@@ -448,7 +511,7 @@ function pointToOverlay {
 #
 #This function receives the following arguments:
 local insideDir=$1 #the root directory where results are going to be written inside the overlays
-local nDomains=$2 #the number of subdomains in the OpenFOAM decomposition
+local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
 #
 #No global variables are created back
 #
@@ -466,7 +529,7 @@ done
 #Creating the soft links (will initially appear as broken)
 echo "Creating the soft links to point towards the interior of the overlay files"
 local ii=0
-for ii in $(seq 0 $(( nDomains -1 ))); do
+for ii in $(seq 0 $(( foam_numberOfSubdomains -1 ))); do
     echo "Linking to $insideDir/processor${ii} in overlay${ii}"
     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s $insideDir/processor${ii} processor${ii} &
 done

@@ -78,12 +78,34 @@ if [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
-#8. Execute the case 
+#8. (OpenFOAM-2.2.0 is looking for dictionaries inside the processor* directories, so this will be copied into):
+echo "Copying system dir into the overlayN/processorN/"
+copyIntoOverlayII "system" "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true";success=$? #Calling copy function (see syntax in the function definition)
+if [ $success -ne 0 ]; then
+   echo "Failed creating the inside directories, exiting"
+   echo "Exiting";exit 1
+fi
+
+echo "Copying properties files from constant into the overlayN/processorN/constant"
+copyIntoOverlayII 'constant/*Properties' "$insideDir/"'processor${ii}/constant/' "$foam_numberOfSubdomains" "true";success=$? #Calling copy function (see syntax in the function definition)
+if [ $success -ne 0 ]; then
+   echo "Failed creating the inside directories, exiting"
+   echo "Exiting";exit 1
+fi
+
+echo "Copying dictionaries from constant into the overlayN/processorN/constant"
+copyIntoOverlayII 'constant/*Dict' "$insideDir/"'processor${ii}/constant/' "$foam_numberOfSubdomains" "true";success=$? #Calling copy function (see syntax in the function definition)
+if [ $success -ne 0 ]; then
+   echo "Failed creating the inside directories, exiting"
+   echo "Exiting";exit 1
+fi
+
+#9. Execute the case 
 echo "About to execute the case"
 srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c 'singularity exec --overlay overlay${SLURM_PROCID} '"$theImage"' pimpleFoam -parallel 2>&1' | tee $logsDir/log.pimpleFoam.$SLURM_JOBID
 echo "Execution finished"
 
-#9. Transfer a few result times available inside the OverlayFS towards the bak.procesors directories
+#10. Transfer a few result times available inside the OverlayFS towards the bak.procesors directories
 #reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function "generateReconstructArray"
 if [ -z "$reconstructTimes" ]; then
    echo "No copy of times from the overlays to the host will be performed at this point"

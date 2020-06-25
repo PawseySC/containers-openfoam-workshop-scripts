@@ -73,10 +73,7 @@ fi
 
 #8. Transfer the content of the bak.processor* directories into the overlayFS
 echo "Copying OpenFOAM files inside bak.processor* into the overlays"
-#Calling the function for copying into the overlays (see usage instructions in the function definition)
-#Note the use of single quotes for passing the wildcard '*' to the function without evaluation
-#Also note the use of single quotes '${ii}' in the place where the number of the overlayN/processorN is needed
-copyIntoOverlayII 'bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true";success=$? 
+copyIntoOverlayII 'bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true";success=$? #Calling the function for copying into the overlays (see usage instructions in the function definition)
 if [ $success -ne 0 ]; then 
    echo "Failed creating the inside directories, exiting"
    echo "Exiting";exit 1
