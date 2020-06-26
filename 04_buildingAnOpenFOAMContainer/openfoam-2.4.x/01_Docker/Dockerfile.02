@@ -80,26 +80,26 @@ WORKDIR $OFINSTDIR
 #But harmless.
 RUN apt-get update -qq\
  &&  apt-get -y --no-install-recommends --no-install-suggests install \
-#@@@#   build-essential\
+#commentedForExercise#   build-essential\
    flex bison git-core cmake zlib1g-dev \
-#@@@#   libboost-system-dev libboost-thread-dev \
-#@@@##AEG:No OpenMPI because MPICH will be used (installed in the parent FROM container)
-#@@@##AEG:NoOpenMPI:   libopenmpi-dev openmpi-bin \
-#@@@##AEG:(using libncurses-dev, as in official instructions, and not libncurses5-dev, as in wiki)
-#@@@#   gnuplot libreadline-dev libncurses-dev libxt-dev \
-#@@@#   qt4-dev-tools libqt4-dev libqt4-opengl-dev \ 
-#@@@#   freeglut3-dev libqtwebkit-dev \
-#@@@##AEG:No scotch because it installs openmpi which later messes up with MPICH
-#@@@##    Therefore, ThirdParty scotch is the one to be installed and used by openfoam.
-#@@@##AEG:NoScotch:   libscotch-dev \
-#@@@#   libcgal-dev \
-#@@@##AEG:These libraries are needed for CGAL (system and third party) (if needed, change libgmp-dev for libgmp3-dev):
-#@@@#   libgmp-dev libmpfr-dev\
-#@@@##AEG: Some more suggestions from the wiki instructions:
-#@@@#   python python-dev \
-#@@@#   libglu1-mesa-dev \
-#@@@##AEG:I found the following was needed to install  FlexLexer.h
-#@@@#   libfl-dev \
+#commentedForExercise#   libboost-system-dev libboost-thread-dev \
+#commentedForExercise##AEG:No OpenMPI because MPICH will be used (installed in the parent FROM container)
+#commentedForExercise##AEG:NoOpenMPI:   libopenmpi-dev openmpi-bin \
+#commentedForExercise##AEG:(using libncurses-dev, as in official instructions, and not libncurses5-dev, as in wiki)
+#commentedForExercise#   gnuplot libreadline-dev libncurses-dev libxt-dev \
+#commentedForExercise#   qt4-dev-tools libqt4-dev libqt4-opengl-dev \ 
+#commentedForExercise#   freeglut3-dev libqtwebkit-dev \
+#commentedForExercise##AEG:No scotch because it installs openmpi which later messes up with MPICH
+#commentedForExercise##    Therefore, ThirdParty scotch is the one to be installed and used by openfoam.
+#commentedForExercise##AEG:NoScotch:   libscotch-dev \
+#commentedForExercise#   libcgal-dev \
+#commentedForExercise##AEG:These libraries are needed for CGAL (system and third party) (if needed, change libgmp-dev for libgmp3-dev):
+#commentedForExercise#   libgmp-dev libmpfr-dev\
+#commentedForExercise##AEG: Some more suggestions from the wiki instructions:
+#commentedForExercise#   python python-dev \
+#commentedForExercise#   libglu1-mesa-dev \
+#commentedForExercise##AEG:I found the following was needed to install  FlexLexer.h
+#commentedForExercise#   libfl-dev \
  && apt-get clean all \
  && rm -r /var/lib/apt/lists/*
 
