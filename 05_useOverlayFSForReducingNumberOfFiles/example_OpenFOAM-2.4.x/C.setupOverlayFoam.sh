@@ -3,7 +3,7 @@
 #SBATCH --mem=4G
 #SBATCH --ntasks-per-node=28
 #SBATCH --clusters=zeus
-#@@#SBATCH --partition=copyq #Ideally use copyq for this kind of process
+#@@#SBATCH --partition=copyq #Ideally use copyq for this kind of process. copyq is on zeus.
 #SBATCH --partition=workq
 #SBATCH --time=0:10:00
 #SBATCH --export=none

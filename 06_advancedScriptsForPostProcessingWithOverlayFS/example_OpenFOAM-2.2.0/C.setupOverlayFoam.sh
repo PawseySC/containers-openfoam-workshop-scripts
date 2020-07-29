@@ -1,7 +1,8 @@
 #!/bin/bash -l
 #SBATCH --ntasks=4
 #SBATCH --mem=4G
-#SBATCH --partition=copyq
+#SBATCH --clusters=zeus
+#SBATCH --partition=copyq #Ideally, use copyq for this process. copyq is on zeus.
 #SBATCH --time=0:10:00
 #SBATCH --export=none
 

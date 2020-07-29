@@ -2,7 +2,8 @@
 #SBATCH --export=NONE
 #SBATCH --time=00:05:00
 #SBATCH --ntasks=1
-#SBATCH --partition=copyq #Ideally, you should be using the copyq for this kind of processes
+#SBATCH --clusters=zeus 
+#SBATCH --partition=copyq #Ideally, use the copyq for this processes. copyq is on zeus.
  
 #1. Load the necessary modules
 module load singularity
