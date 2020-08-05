@@ -29,67 +29,96 @@ else
    echo "Exiting";exit 1
 fi
 
-#3. Reading the OpenFOAM decomposeParDict settings
+#3. Create the directory where the OverlayFS files are going to be kept
+if ! [ -d $overlayFSDir ]; then
+   echo "Creating the directory that will contain the overlayFS files:"
+   echo "$overlayFSDir"
+   mkdir -p $overlayFSDir
+else
+   echo "For some reason, the directory for saving the overlay files already exists:"
+   echo "$overlayFSDir"
+   echo "Warning:No creation needed"
+fi
+
+#4. Reading the OpenFOAM decomposeParDict settings
 foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict | tr -dc '0-9')
 
-#4. Rename the processor* directories into bak.processor*
+#5. Rename the processor* directories into bak.processor* and move them into ./bakDir
 #(OpenFOAM wont be able to see these directories)
 #(Access will be performed through soft links)
 echo "Renaming the processor directories"
 rename processor bak.processor processor*
+if ! [ -d bakDir ]; then
+   echo "Creating the directory that will contain the bak.processor* directories:"
+   echo "bakDir"
+   mkdir -p bakDir
+else
+   echo "For some reason, the directory for containing the bak.processor* dirs already exists:"
+   echo "bakDir"
+   echo "Warning:No creation needed"
+fi
 
-#5. Creating a first overlay file (overlay0)
-createOverlay0 $overlaySizeGb;success=$? #Calling the function for creating the overlay0 file
-if [ $success -eq 222 ]; then 
-   echo "overlay0 already exists"
-   echo "Exiting";exit 1
-elif [ $success -ne 0 ]; then 
-   echo "Failed creating overlay0, exiting"
+if ! [ -d bakDir/bak.processor0 ]; then
+   echo "Moving all bak.processor* directories into bakDir"
+   mv bak.processor* bakDir
+else
+   echo "The directory bakDir/bak.processor0 already exists"
+   echo "No move/replacement of bak.processor* directories will be performed"
    echo "Exiting";exit 1
 fi
 
-#6. Replicating the overlay0 file into the needed number of overlay* files (as many as processors*)
+#6. Creating a first overlay file (overlay0)
+createOverlay0 $overlayFSDir $overlaySizeGb;success=$? #Calling the function for creating the overlay0 file
+if [ $success -eq 222 ]; then 
+   echo "${overlayFSDir}/overlay0 already exists"
+   echo "Exiting";exit 1
+elif [ $success -ne 0 ]; then 
+   echo "Failed creating ${overlayFSDir}/overlay0, exiting"
+   echo "Exiting";exit 1
+fi
+
+#7. Replicating the overlay0 file into the needed number of overlay* files (as many as processors*)
 echo "Replication overlay0 into the rest of the overlay* files"
 for ii in $(seq 1 $(( foam_numberOfSubdomains - 1 ))); do
-    if [ -f overlay${ii} ]; then
-       echo "overlay${ii} already exists"
+    if [ -f ${overlayFSDir}/overlay${ii} ]; then
+       echo "${overlayFSDir}/overlay${ii} already exists"
        echo "Deal with it first and remove it from the working directory"
        echo "Exiting";exit 1
     else
-       echo "Replicating overlay0 into overlay${ii}"
-       srun -n 1 -N 1 --mem-per-cpu=0 --exclusive cp overlay0 overlay${ii} &
+       echo "Replicating ${overlayFSDir}/overlay0 into ${overlayFSDir}/overlay${ii}"
+       srun -n 1 -N 1 --mem-per-cpu=0 --exclusive cp ${overlayFSDir}/overlay0 ${overlayFSDir}/overlay${ii} &
     fi
 done
 wait
 
-#7. Creating inside processor* directories inside the overlayFS 
-createInsideProcessorDirs $insideDir $foam_numberOfSubdomains;success=$? #Calling the function for creatingthe inside directories 
+#8. Creating inside processor* directories inside the overlayFS 
+createInsideProcessorDirs $overlayFSDir $insideDir $foam_numberOfSubdomains;success=$? #Calling the function for creatingthe inside directories 
 if [ $success -eq 222 ]; then 
-   echo "$insideDir/processor0 already exists"
+   echo "$insideDir/processor0 already exists inside the $overlayFSDir/overlay0 file"
    echo "Exiting";exit 1
 elif [ $success -ne 0 ]; then 
    echo "Failed creating the inside directories, exiting"
    echo "Exiting";exit 1
 fi
 
-#8. Transfer the content of the bak.processor* directories into the overlayFS
-echo "Copying OpenFOAM files inside bak.processor* into the overlays"
+#9. Transfer the content of the ./bakDir/bak.processor* directories into the overlayFS
+echo "Copying OpenFOAM the files inside ./bakDir/bak.processor* into the overlays"
 #Calling the function for copying into the overlays (see usage instructions in the function definition)
 #Note the use of single quotes for passing the wildcard '*' to the function without evaluation
 #Also note the use of single quotes '${ii}' in the place where the number of the overlayN/processorN is needed
-copyIntoOverlayII 'bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true";success=$? 
+copyIntoOverlayII $overlayFSDir 'bakDir/bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true";success=$? 
 if [ $success -ne 0 ]; then 
    echo "Failed creating the inside directories, exiting"
    echo "Exiting";exit 1
 fi
 
-#9. Mark the initial conditions time directory as already fully reconstructed
+#10. Mark the initial conditions time directory as already fully reconstructed
 echo "Marking the time directory \"0\" as fully reconstructed"
 touch 0/.reconstructDone
 
-#10. List the content of directories inside the overlay* files
+#11. List the content of directories inside the overlay* files
 echo "Listing the content in overlay0 $insideDir/processor0"
-srun -n 1 -N 1 singularity exec --overlay overlay0 $theImage ls -lat $insideDir/processor0/
+srun -n 1 -N 1 singularity exec --overlay ${overlayFSDir}/overlay0 $theImage ls -lat $insideDir/processor0/
 
 #X. Final step
 echo "Script done"

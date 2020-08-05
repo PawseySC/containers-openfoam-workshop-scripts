@@ -45,14 +45,14 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="50,60,70,80,90"
 reconstructTimes="10:20"
 unset arrayReconstruct #This global variable will be re-created in the function below
-generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
+generateReconstructArray $overlayFSDir "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
    echo "Failed creating the arrayReconstruct"
    echo "Exiting";exit 1
 fi
 
-#5. Generate a list of times that already exist in the bak.processor directories
-ls -dt bak.processor0/[0-9]* | sed "s,bak.processor0/,," > bakTimes.$SLURM_JOBID
+#5. Generate a list of times that already exist in the ./bakDir/bak.processor directories
+ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > bakTimes.$SLURM_JOBID
 sort -n bakTimes.$SLURM_JOBID -o bakTimesSorted.$SLURM_JOBID
 rm bakTimes.$SLURM_JOBID
 i=0
@@ -66,7 +66,7 @@ done < bakTimesSorted.$SLURM_JOBID
 nTimeBak=$i
 rm bakTimesSorted.$SLURM_JOBID
 if [ $nTimeBak -eq 0 ]; then
-   echo "NO time directories available in bak.processor0"
+   echo "NO time directories available in ./bakDir/bak.processor0"
 else
    echo "The minTime already in bak is ${bakArr[0]}"
    echo "The minTime to be transferred is ${arrayReconstruct[0]}"
@@ -90,7 +90,7 @@ done
 echo "Times to be copied from the overlays are:"
 echo "${realToDoReconstruct[@]}"
 
-#7. Copy times from overlay* into bak.processors* if not already successfully reconstructed
+#7. Copy times from overlay* into ./bakDir/bak.processors* if not already successfully reconstructed
 maxTimeTransfersFromOverlays=10
 for ii in ${!realToDoReconstruct[@]}; do
    if [ $ii -ge $maxTimeTransfersFromOverlays ]; then
@@ -107,9 +107,9 @@ for ii in ${!realToDoReconstruct[@]}; do
    unset arrayCopyIntoBak
    arrayCopyIntoBak[0]="${timeHere}"
    replace="true"
-   copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into bak.processor*
+   copyResultsIntoBak "$overlayFSDir" "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
    if [ $success -ne 0 ]; then
-      echo "Failed transferring $arrayCopyIntoBak[@] decomposed time directories into bak.processor* directories"
+      echo "Failed transferring $arrayCopyIntoBak[@] decomposed time directories into ./bakDir/bak.processor* directories"
       echo "Exiting";exit 1
    fi
 done

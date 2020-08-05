@@ -8,18 +8,19 @@ function copyIntoOverlayII {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local sourceString=$1
-local destinyString=$2
-local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
-local replace=$4 #Replace files/directories if they already exist? "true" or "false"
+local overlayFSDir=$1 #Directory where the overlay files are going to be saved
+local sourceString=$2 #String defining the source of files to be copied
+local destinyString=$3 #String defining the destiny of the files to be copied
+local foam_numberOfSubdomains=$4 #the number of subdomains in the OpenFOAM decomposition
+local replace=$5 #Replace files/directories if they already exist? "true" or "false"
 #
 #IMPORTANT:#It needs to be called like:
-#copyIntoOverlayII "$sourceStringOrg" "$destinyStringOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg"
+#copyIntoOverlayII "$overlayFSDirOrg" "$sourceStringOrg" "$destinyStringOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg"
 #The source and destiny strings my contain the for counter '${ii}', but it needs to be defined with single quotes
 #to avoid evaluation. The same for wildcards as '*'
 #Evaluation is performed within the for loop inside the function
 #For example,
-#copyIntoOverlayII 'bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true"
+#copyIntoOverlayII "$overlayFSDir" './bakDir/bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true"
 #
 #No global variables are created back
 #
@@ -45,7 +46,7 @@ for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
    echo "sourceStringII=$sourceStringII"
    eval destinyStringII=$destinyString
    echo "destinyStringII=$destinyStringII"
-   srun -n 1 -N 1 --job-name=$name --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} docker://ubuntu:18.04 cp $cpOptions $sourceStringII $destinyStringII &
+   srun -n 1 -N 1 --job-name=$name --mem-per-cpu=0 --exclusive singularity exec --overlay ${overlayFSDir}/overlay${ii} docker://ubuntu:18.04 cp $cpOptions $sourceStringII $destinyStringII &
 done
 wait
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
@@ -71,14 +72,15 @@ function copyResultsIntoBak {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local insideDir=$1 #the root directory where results are going to be written inside the overlays
-local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
-local replace=$3 #Replace folders if they already exist? "true" or "false"
-shift 3
+local overlayFSDir=$1 #Directory where the overlay files are going to be saved
+local insideDir=$2 #the "base" directory where results are going to be written inside the overlays
+local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
+local replace=$4 #Replace folders if they already exist? "true" or "false"
+shift 4
 local arrayHere=("$@") #has the array of the times to be transferred
 #
 #IMPORTANT:#It needs to be called like:
-#copyResultsIntoBak "$insideDirOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg" "${arrayOrg[@]}"
+#copyResultsIntoBak "$overlayFSDirOrg" "$insideDirOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg" "${arrayOrg[@]}"
 #IMPORTANT:Note that the original array from the calling scritpt needs to be expanded as an argument
 #
 #No global variables are created back
@@ -87,18 +89,18 @@ local arrayHere=("$@") #has the array of the times to be transferred
 #(return value should be catch with $? immediately after usage)
 #
 #...............................................................
-echo "Copying files from the overlays into the bak.processors directories"
+echo "Copying files from the overlays into the ./bakDir/bak.processors directories"
 local jj=0
 for jj in ${arrayHere[@]}; do
    #Checking if the folder already exists in bak.processor0 
    local proceed="true"
-   if [ -d ./bak.processor0/${jj} ]; then
+   if [ -d ./bakDir/bak.processor0/${jj} ]; then
       if [ "$replace" == "false" ]; then
-         echo "Directory bak.processor0/${jj} already exists."
+         echo "Directory ./bakDir/bak.processor0/${jj} already exists."
          echo "Setting is replace=$replace. So time folder will not be replaced with the overlay0 content."
          proceed="false"
       else
-         echo "Directory bak.processor0/${jj} already exists."
+         echo "Directory ./bakDir/bak.processor0/${jj} already exists."
          echo "Setting is replace=$replace. So time folder will be overwritten with the overlay0 content."
       fi
    fi
@@ -106,17 +108,17 @@ for jj in ${arrayHere[@]}; do
       echo "Copying time ${jj} to all the bak.procesors"
       local ii
       for ii in $(seq 0 $((foam_numberOfSubdomains -1))); do
-         echo "Writing in bak.processor${ii}"
-         srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bak.processor${ii}/ &
+         echo "Writing into ./bakDir/bak.processor${ii}"
+         srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ${overlayFSDir}/overlay${ii} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bakDir/bak.processor${ii}/ &
       done
       wait
    fi
 done
 #Testing at least for bak.processor0
-echo "Checking that indicated time directories are present in bak.processor0"
+echo "Checking that indicated time directories are present in ./bakDir/bak.processor0"
 for jj in ${arrayHere[@]}; do
-   if ! [ -d bak.processor0/${jj} ]; then
-      echo "Time directory ${jj} is not in bak.procesor0"
+   if ! [ -d ./bakDir/bak.processor0/${jj} ]; then
+      echo "Time directory ${jj} is not in ./bakDir/bak.procesor0"
       return 1
    fi
 done
@@ -133,8 +135,9 @@ function createInsideProcessorDirs {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local insideDir=$1 #the root directory where results are going to be written inside the overlays
-local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
+local overlayFSDir=$1 #Directory where the overlay files are going to be saved
+local insideDir=$2 #the "base" directory where results are going to be written inside the overlays
+local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
 #
 #No global variables are created back
 #
@@ -144,7 +147,7 @@ local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decom
 #...............................................................
 #Checking if the directories already exist
 echo "Checking if $insideDir/processor0 directory is already there"
-srun -n 1 -N 1 singularity exec --overlay overlay0 docker://ubuntu:18.04 ls -dlh $insideDir/processor0
+srun -n 1 -N 1 singularity exec --overlay ${overlayFSDir}/overlay0 docker://ubuntu:18.04 ls -dlh $insideDir/processor0
 local success=$?
 if [ "$success" -eq 0 ]; then
    echo "Directory $insideDir/processor0 already exists. No further internal creation or deletion will be done"
@@ -157,11 +160,11 @@ echo "Creating the directories inside the overlays"
 local ii
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
    echo "Creating processor${ii} inside overlay${ii}"
-   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay${ii} docker://ubuntu:18.04 mkdir -p $insideDir/processor${ii} &
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ${overlayFSDir}/overlay${ii} docker://ubuntu:18.04 mkdir -p $insideDir/processor${ii} &
 done
 wait
 #Testing and returning the value of the test:
-srun -n 1 -N 1 singularity exec --overlay overlay0 docker://ubuntu:18.04 ls -dlh $insideDir/processor0
+srun -n 1 -N 1 singularity exec --overlay ${overlayFSDir}/overlay0 docker://ubuntu:18.04 ls -dlh $insideDir/processor0
 return $?
 }
 #End ===========================================================
@@ -176,7 +179,8 @@ function createOverlay0 {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local overlaySizeGb=$1 #the size of the file as a first argument (considered in Gb)
+local overlayFSDir=$1 #Directory where the overlay files are going to be saved
+local overlaySizeGb=$2 #the size of the file as a first argument (considered in Gb)
 #
 #No global variables are created back
 #
@@ -185,8 +189,8 @@ local overlaySizeGb=$1 #the size of the file as a first argument (considered in 
 #
 #...............................................................
 #Checking if an overlay0 already exists
-if [ -f overlay0 ]; then
-   echo "A file named overlay0 already exists."
+if [ -f ${overlayFSDir}/overlay0 ]; then
+   echo "A file named ${overlayFSDir}/overlay0 already exists."
    echo "Aborting the creation of overlay0 file in order to avoid loss of information"
    echo "Check your overlay files and content, and remove them from the working directory first, if new overlay0 is needed"
    return 222
@@ -194,21 +198,21 @@ fi
 
 #Creating the overlay0
 #(Needs to use ubuntu:18.04 or higher to use the -d <root-dir> option to make them writable by simple users)
-echo "Creating the overlay0 file"
+echo "Creating the ${overlayFSDir}/overlay0 file"
 echo "The size in Gb is overlaySizeGb=$overlaySizeGb"
 if [ $overlaySizeGb -gt 0 ]; then
    local countSize=$(( overlaySizeGb * 1024 * 1024 ))
    srun -n 1 -N 1 singularity exec docker://ubuntu:18.04 bash -c " \
         mkdir -p overlay_tmp/upper && \
-        dd if=/dev/zero of=overlay0 count=$countSize bs=1024 && \
-        mkfs.ext3 -d overlay_tmp overlay0 && rm -rf overlay_tmp \
+        dd if=/dev/zero of=${overlayFSDir}/overlay0 count=$countSize bs=1024 && \
+        mkfs.ext3 -d overlay_tmp ${overlayFSDir}/overlay0 && rm -rf overlay_tmp \
         "
 else
    echo "Variable overlaySizeGb was not set correctly"
    echo "In theory, this should have been set together with the singularity settings"
 fi 
 #Testing and returning the value of the test:
-srun -n 1 -N 1 singularity exec --overlay overlay0 docker://ubuntu:18.04 ls -lh overlay0
+srun -n 1 -N 1 singularity exec --overlay ${overlayFSDir}/overlay0 docker://ubuntu:18.04 ls -lh ${overlayFSDir}/overlay0
 return $?
 }
 #End ===========================================================
@@ -327,8 +331,9 @@ function generateReconstructArray {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local reconstructTimes="$1" #the indication of the reconstruct times we are looking for
-local whatSource="$2" #If the value is "bak", then results in bak.processors* will be used.
+local overlayFSDir=$1 #Directory where the overlay files are going to be saved
+local reconstructTimes="$2" #the indication of the reconstruct times we are looking for
+local whatSource="$3" #If the value is "bak", then results in ./bakDir/bak.processors* will be used.
                      #Otherwise, it indicates where results are being created inside the overlay* files
 #
 #Examples of the 5 accepted formats for the reconstructTimes parameter are:
@@ -350,10 +355,10 @@ arrayReconstruct[0]=-1 #Global array with the times to be reconstructed (will gr
 #Generating a list of existing time directories
 if [ "$whatSource" == "bak" ]; then
    echo "Creating a list of existing time directories in ${whatSource}.processor0"
-   ls -dt ${whatSource}.processor0/[0-9]* | sed "s,${whatSource}.processor0/,," > listTimes.$SLURM_JOBID
+   ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > listTimes.$SLURM_JOBID
 else
-   echo "Creating a list of existing time directories in ${whatSource}/processor0 of overlay0"
-   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay overlay0 docker://ubuntu:18.04 bash -c \
+   echo "Creating a list of existing time directories in ${whatSource}/processor0 of ${overlayFSDir}/overlay0"
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ${overlayFSDir}/overlay0 docker://ubuntu:18.04 bash -c \
        "ls -dt $whatSource/processor0/[0-9]* | sed 's,$whatSource/processor0/,,' > listTimes.$SLURM_JOBID"
 fi
 sort -n listTimes.$SLURM_JOBID -o listTimesSorted.$SLURM_JOBID
@@ -368,7 +373,7 @@ while read textTimeDir; do
 done < listTimesSorted.$SLURM_JOBID
 local nTimeDirectories=$i
 if [ $nTimeDirectories -eq 0 ]; then
-   echo "NO time directories available for the case in overlay0"
+   echo "NO time directories available for the case in ${overlayFSDir}/overlay0"
 else
    echo "The maxTimeSeen=${timeDirArr[$((nTimeDirectories - 1))]}"
 fi
@@ -453,9 +458,9 @@ if [ $nReconstruct -gt 0 ]; then
 else
    echo "Global arrayReconstruct could not be created with those settings. Check what failed"
    if [ "$whatSource" == "bak" ]; then
-      echo "The list of existing times in ${whatSource}.processor0 is in listTimesSorted.$SLURM_JOBID file"
+      echo "The list of existing times in ./bakDir/bak.processor0 is in listTimesSorted.$SLURM_JOBID file"
    else
-      echo "The list of existing times inside overlay0 ($whatSource/processor0) is in listTimesSorted.$SLURM_JOBID file"
+      echo "The list of existing times inside ${overlayFSDir}/overlay0 ($whatSource/processor0) is in listTimesSorted.$SLURM_JOBID file"
    fi
    return 1
 fi
@@ -465,7 +470,7 @@ fi
 #---------------------------------------------------------------
 #---------------------------------------------------------------
 function pointToBak {
-#Creating soft links to point towards the bak.processor* directories
+#Creating soft links to point towards the ./bakDir/bak.processor* directories
 #
 #This function receives No Global variables:
 #
@@ -486,10 +491,10 @@ for ll in $linkList; do
 done
 
 #Creating the broken soft links
-echo "Creating the soft links to point towards the bak.processor* directories"
+echo "Creating the soft links to point towards the ./bakDir/bak.processor* directories"
 for ii in $(seq 0 $(( foam_numberOfSubdomains -1 ))); do
-    echo "Linking to bak.procesor${ii}"
-    srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s bak.processor${ii} processor${ii} &
+    echo "Linking to ./bakDir/bak.procesor${ii}"
+    srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s ./bakDir/bak.processor${ii} processor${ii} &
 done
 wait
 
@@ -510,8 +515,9 @@ function pointToOverlay {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local insideDir=$1 #the root directory where results are going to be written inside the overlays
-local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
+local overlayFSDir=$1 #Directory where the overlay files are going to be saved
+local insideDir=$2 #the "base" directory where results are going to be written inside the overlays
+local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
 #
 #No global variables are created back
 #
@@ -530,13 +536,13 @@ done
 echo "Creating the soft links to point towards the interior of the overlay files"
 local ii=0
 for ii in $(seq 0 $(( foam_numberOfSubdomains -1 ))); do
-    echo "Linking to $insideDir/processor${ii} in overlay${ii}"
+    echo "Linking to $insideDir/processor${ii} in ${overlayFSDir}/overlay${ii}"
     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive ln -s $insideDir/processor${ii} processor${ii} &
 done
 wait
 
 #Testing and returning the value of the test:
-srun -n 1 -N 1 singularity exec --overlay overlay0 docker://ubuntu:18.04 ls -dlh processor0
+srun -n 1 -N 1 singularity exec --overlay ${overlayFSDir}/overlay0 docker://ubuntu:18.04 ls -dlh processor0
 return $?
 }
 #End ===========================================================

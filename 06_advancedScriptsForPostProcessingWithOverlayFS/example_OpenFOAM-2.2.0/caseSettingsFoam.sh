@@ -25,6 +25,9 @@ caseDir=$baseWorkingDir/$caseName
 #@@#   mkdir -p $userProjectDir
 #@@#fi
 
+#Defining the folder for saving the OverlayFS files
+overlayFSDir=$caseDir/overlayFSDir
+
 #Defining the name of the directory inside the overlay* files at which results will be saved
 baseInsideDir=/overlayOpenFOAM/run
 insideName=$caseName

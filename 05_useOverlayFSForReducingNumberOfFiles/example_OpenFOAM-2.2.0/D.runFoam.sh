@@ -85,7 +85,10 @@ if [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
-#8. (OpenFOAM-2.2.0 is looking for dictionaries inside the processor* directories, so this will be copied into):
+#8. (OpenFOAM-2.2.0 is looking for dictionaries inside the processor* directories,
+#  so these dictionaries will be copied into the processor* directories inside the Overlays.
+#  IMPORTANT: copy is performed here just before the solver execution, to warranty
+#             that copied dictionaries are the most recent and updated ones for the solver.
 echo "Copying dictionaries and properties into the overlays"
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
     echo "Writing into overlay${ii}"

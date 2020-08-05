@@ -22,7 +22,7 @@ else
    echo "Exiting"; exit 1
 fi
 
-#2. Going into the case and creating the logs dir
+#2. Going into the case, creating the logs dir if it does not exists
 if [ -d $caseDir ]; then
    cd $caseDir
    echo "pwd=$(pwd)"
@@ -53,9 +53,11 @@ foam_startFrom=startTime
 #foam_startFrom=latestTime
 foam_startTime=0
 #foam_startTime=10
+#foam_startTime=40
 #foam_endTime=10
 #foam_endTime=20
 foam_endTime=40
+#foam_endTime=45
 #foam_endTime=100
 foam_writeInterval=1 #For the purposes of this test, but ideally should be a reasonable writing frequency
 foam_purgeWrite=0 #For the purposes of this test, but ideally should be a reasonable number
@@ -72,7 +74,7 @@ sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
 #These links and directories will be recognized by each mpi instance of the container
 #(Initially these links will appear broken as they are pointing towards the interior of the overlay* files.
 # They will only be recognized within the containers)
-pointToOverlay $insideDir $foam_numberOfSubdomains;success=$? #Calling function to point towards the interior
+pointToOverlay $overlayFSDir $insideDir $foam_numberOfSubdomains;success=$? #Calling function to point towards the interior
 if [ $success -ne 0 ]; then
    echo "Failed creating the soft links"
    echo "Exiting";exit 1
@@ -80,24 +82,25 @@ fi
 
 #8. Execute the case 
 echo "About to execute the case"
-srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c 'singularity exec --overlay overlay${SLURM_PROCID} '"$theImage"' pimpleFoam -parallel 2>&1' | tee $logsDir/log.pimpleFoam.$SLURM_JOBID
+srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c "singularity exec --overlay ${overlayFSDir}/"'overlay${SLURM_PROCID}'" $theImage pimpleFoam -parallel 2>&1" | tee $logsDir/log.pimpleFoam.$SLURM_JOBID
 echo "Execution finished"
 
-#9. Transfer a few result times available inside the OverlayFS towards the bak.procesors directories
+#9. Transfer a few result times available inside the OverlayFS towards the ./bakDir/bak.procesors directories
 #reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function "generateReconstructArray"
 if [ -z "$reconstructTimes" ]; then
+   echo "reconstructTimes string was not set, implying that:"
    echo "No copy of times from the overlays to the host will be performed at this point"
 else
    unset arrayReconstruct #This global variable will be re-created in the function below
-   generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
+   generateReconstructArray $overlayFSDir "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
    if [ $success -ne 0 ]; then
       echo "Failed creating the arrayReconstruct"
       echo "Exiting";exit 1
    fi
    replace="false"
-   copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into bak.processor*
+   copyResultsIntoBak "$overlayFSDir" "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
    if [ $success -ne 0 ]; then
-      echo "Failed transferring files into bak.processor* directories"
+      echo "Failed transferring files into ./bakDir/bak.processor* directories"
       echo "Exiting";exit 1
    fi
 fi

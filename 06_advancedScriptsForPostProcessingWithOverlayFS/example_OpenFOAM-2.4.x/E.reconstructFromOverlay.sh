@@ -45,22 +45,22 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="50,60,70,80,90"
 reconstructTimes="0:10"
 unset arrayReconstruct #This global variable will be re-created in the function below
-generateReconstructArray "$reconstructTimes" "$insideDir";success=$? #Calling fucntion to generate "arrayReconstruct"
+generateReconstructArray $overlayFSDir "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
    echo "Failed creating the arrayReconstruct"
    echo "Exiting";exit 1
 fi
 
-#5. Point the soft links to the bak.processor* directories
-pointToBak $foam_numberOfSubdomains;success=$? #Calling function to point towards the bak.processors
+#5. Point the soft links to the ./bakDir/bak.processor* directories
+pointToBak $foam_numberOfSubdomains;success=$? #Calling function to point towards the ./bakDir/bak.processors
 if [ $success -ne 0 ]; then
    echo "Failed creating the soft links"
    echo "Exiting";exit 1
 fi
 
-#6. Generate a list of time directories in bak.processor* to be preserved and not removed after reconstruction
+#6. Generate a list of the time directories inside ./bakDir/bak.processor* to be preserved and not removed after reconstruction
 #   (The earlier and latest times will be preserved)
-ls -dt bak.processor0/[0-9]* | sed "s,bak.processor0/,," > bakTimes.$SLURM_JOBID
+ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > bakTimes.$SLURM_JOBID
 sort -n bakTimes.$SLURM_JOBID -o bakTimesSorted.$SLURM_JOBID
 rm bakTimes.$SLURM_JOBID
 i=0
@@ -76,7 +76,7 @@ rm bakTimesSorted.$SLURM_JOBID
 keepTimesArr[0]=-1
 nKeepTimes=0
 if [ $nTimeBak -eq 0 ]; then
-   echo "NO time directories available in bak.processor0"
+   echo "NO time directories available in ./bakDir/bak.processor0"
 else
    echo "The minTime already in bak is ${bakArr[0]}"
    echo "The minTime to be reconstructed is ${arrayReconstruct[0]}"
@@ -99,7 +99,7 @@ fi
 #keepTimesArr[$nKeepTimes]=28;(( nKeepTimes++ ))
 #keepTimesArr[$nKeepTimes]=29;(( nKeepTimes++ ))
 #keepTimesArr[$nKeepTimes]=30;(( nKeepTimes++ ))
-echo "All times to be preserved in bak.processor* are:"
+echo "All times to be preserved in ./bakDir/bak.processor* are:"
 echo "${keepTimesArr[@]}"
 
 #7. Check for already reconstructed cases and set the `-time $timeString` argument for the reconstructPar tool
@@ -167,13 +167,13 @@ if [ $countRec -gt 0 ]; then
          echo "kNext=$kNext"
       fi
 
-      ## 9. Copy from the overlays the full batch into bak.processor*
+      ## 9. Copy from the overlays the full batch into ./bakDir/bak.processor*
       unset arrayCopyIntoBak
       arrayCopyIntoBak=("${hereToDoReconstruct[@]}")
       replace="true"
-      copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into bak.processor*
+      copyResultsIntoBak "$overlayFSDir" "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
       if [ $success -ne 0 ]; then
-         echo "Failed transferring files into bak.processor* directories"
+         echo "Failed transferring files into ./bakDir/bak.processor* directories"
          echo "Exiting";exit 1
       fi
       
@@ -223,16 +223,16 @@ if [ $countRec -gt 0 ]; then
          if [ $indexKeep -eq -1 ] && \
             [ $(echo "$timeHere <= ${realToDoReconstruct[((kNext-1))]}" | bc -l) -eq 1 ] && \
             [ $(echo "$timeHere >= ${realToDoReconstruct[$kStart]}" | bc -l) -eq 1 ]; then
-            echo "Removing time ${timeHere} in the bak.processor* directories"
+            echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
             for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-               if [ -d bak.processor${jj}/${timeHere} ]; then
-                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+               if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
                fi
             done
             wait
             for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-               if [ -d bak.processor${jj}/${timeHere} ]; then
-                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+               if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
                fi
             done
             wait
