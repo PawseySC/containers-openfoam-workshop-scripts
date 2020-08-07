@@ -45,7 +45,7 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="50,60,70,80,90"
 reconstructTimes="0:10"
 unset arrayReconstruct #This global variable will be re-created in the function below
-generateReconstructArray $overlayFSDir "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
+generateReconstructArray "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
    echo "Failed creating the arrayReconstruct"
    echo "Exiting";exit 1
@@ -167,11 +167,11 @@ if [ $countRec -gt 0 ]; then
          echo "kNext=$kNext"
       fi
 
-      ## 9. Copy from the overlays the full batch into ./bakDir/bak.processor*
+      ## 9. Copy from the ./overlayFSDir/overlay* the full batch into ./bakDir/bak.processor*
       unset arrayCopyIntoBak
       arrayCopyIntoBak=("${hereToDoReconstruct[@]}")
       replace="true"
-      copyResultsIntoBak "$overlayFSDir" "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
+      copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
       if [ $success -ne 0 ]; then
          echo "Failed transferring files into ./bakDir/bak.processor* directories"
          echo "Exiting";exit 1

@@ -57,7 +57,7 @@ if [ -z "$reconstructTimes" ]; then
    echo "Exiting"; exit 0
 else
    unset arrayReconstruct #This global variable will be re-created in the function below
-   generateReconstructArray $overlayFSDir "$reconstructTimes" "bak";success=$? #Calling function to generate "arrayReconstruct"
+   generateReconstructArray "$reconstructTimes" "bak";success=$? #Calling function to generate "arrayReconstruct"
    if [ $success -ne 0 ]; then
       echo "Failed creating the arrayReconstruct"
       echo "Exiting";exit 1

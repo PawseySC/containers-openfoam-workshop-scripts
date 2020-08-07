@@ -25,10 +25,12 @@ caseDir=$baseWorkingDir/$caseName
 #@@#   mkdir -p $userProjectDir
 #@@#fi
 
-#Defining the folder for saving the OverlayFS files
-overlayFSDir=$caseDir/overlayFSDir
-
-#Defining the name of the directory inside the overlay* files at which results will be saved
+#Defining the name of the directory inside the ./overlayFSDir/overlay* files at which results will be saved
 baseInsideDir=/overlayOpenFOAM/run
 insideName=$caseName
 insideDir=$baseInsideDir/$insideName
+
+#These are not settings, but the directories where the results are going to be saved are:
+#$caseDir/bakDir for the bak.processor* directories, and
+#$caseDir/overlayFSDir for the overlay* files
+#(See the script C.setupOverlayFoam.sh for the creation of those directories)

@@ -45,7 +45,7 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="50,60,70,80,90"
 reconstructTimes="10:20"
 unset arrayReconstruct #This global variable will be re-created in the function below
-generateReconstructArray $overlayFSDir "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
+generateReconstructArray "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
    echo "Failed creating the arrayReconstruct"
    echo "Exiting";exit 1
@@ -80,21 +80,21 @@ realToDoReconstruct[$countRec]=-1
 for ii in ${!arrayReconstruct[@]}; do
    timeHere=${arrayReconstruct[ii]}
    if [ -f ${timeHere}/.reconstructDone ]; then
-      echo "Time ${timeHere} has already been reconstructed. No extraction from the overlays will be performed"
+      echo "Time ${timeHere} has already been reconstructed. No extraction from the ./overlayFSDir/overlay* will be performed"
       echo "If you still need that time to be extracted, do it manually or in other script"
    else
       realToDoReconstruct[$countRec]=$timeHere
       (( countRec++ ))
    fi
 done
-echo "Times to be copied from the overlays are:"
+echo "Times to be copied from the /overlayFSDir/overlay* are:"
 echo "${realToDoReconstruct[@]}"
 
-#7. Copy times from overlay* into ./bakDir/bak.processors* if not already successfully reconstructed
+#7. Copy times from ./overlayFSDir/overlay* into ./bakDir/bak.processors* if not already successfully reconstructed
 maxTimeTransfersFromOverlays=10
 for ii in ${!realToDoReconstruct[@]}; do
    if [ $ii -ge $maxTimeTransfersFromOverlays ]; then
-      echo "Warning: current copy would try to transfer $countRec times from the overlay files"
+      echo "Warning: current copy would try to transfer $countRec times from the ./overlayFSDir/overlay* files"
       echo "This script is set to allow maxTimeTransfersFromOverlays=$maxTimeTransfersFromOverlays"
       echo "The limit has been reached. No more transfers will be performed."
       echo "We recommend you to postprocess (reconstruct) the already transferred results first before trying again to copy more results into the host file system"
@@ -103,11 +103,11 @@ for ii in ${!realToDoReconstruct[@]}; do
    fi
    timeHere=${realToDoReconstruct[ii]}
    echo "Time ${timeHere} will be copied into bak"
-   ##6.2.1 Transfer result time directories from overlays to .bak directories
+   ##6.2.1 Transfer result time directories from ./overlayFSDir/overlay* files to ./bakDir/bak.processor* directories
    unset arrayCopyIntoBak
    arrayCopyIntoBak[0]="${timeHere}"
    replace="true"
-   copyResultsIntoBak "$overlayFSDir" "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
+   copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayCopyIntoBak[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
    if [ $success -ne 0 ]; then
       echo "Failed transferring $arrayCopyIntoBak[@] decomposed time directories into ./bakDir/bak.processor* directories"
       echo "Exiting";exit 1
