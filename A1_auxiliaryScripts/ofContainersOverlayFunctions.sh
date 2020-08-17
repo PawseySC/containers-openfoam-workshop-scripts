@@ -392,7 +392,7 @@ if [[ $reconstructTimes =~ $re ]]; then
       fi
    elif [[ $reconstructTimes =~ $reInt ]]; then #if negative (-N), pick the last N times
       echo "Using the reconstructTimes=-N notation"
-      echo "Picking the last N=$(( -1 * reconstructTimes)) existing times inside the overlays"
+      echo "Picking the last N=$(( -1 * reconstructTimes)) existing times from the source of decomposed results"
       for ii in $(seq $reconstructTimes -1); do
          local indexHere=$((nTimeDirectories + ii))
          if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
@@ -404,14 +404,14 @@ if [[ $reconstructTimes =~ $re ]]; then
 else
    if [ "$reconstructTimes" = "all" ]; then #pick all the existing times
       echo "Using the reconstructTimes=\"all\" notation"
-      echo "Picking all the existing times inside the overlays for reconstruct"
+      echo "Picking all the existing times from the source of decomposed results"
       for ii in $(seq 0 $((nTimeDirectories - 1))); do
          arrayReconstruct[$nReconstruct]=${timeDirArr[$ii]}
          (( nReconstruct++ ))
       done
    elif [[ "$reconstructTimes" == *":"* ]]; then #if using notation with "first:last", pick from start to end (no code to deal with increment in notation)
       echo "Using the range notation reconstructTimes=first:last"
-      echo "Picking all the existing times within the range inside the overlays"
+      echo "Picking all the existing times within the range from the source of decomposed results"
       local firstTime=${reconstructTimes%%:*}
       local lastTime=${reconstructTimes##*:}
       local indexFirst=$(getIndexGE "$firstTime" "${timeDirArr[@]}")

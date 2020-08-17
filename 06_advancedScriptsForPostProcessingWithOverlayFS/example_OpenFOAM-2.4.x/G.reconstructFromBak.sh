@@ -161,19 +161,26 @@ for ii in ${!arrayReconstruct[@]}; do
    ##9.3 Deleting decomposed results, except those indicated to be kept
    indexKeep=$(getIndex "${timeHere}" "${keepTimesArr[@]}")
    if [ $indexKeep -eq -1 ]; then
-      echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
-      for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-         if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-            srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
-         fi
-      done
-      wait
-      for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-         if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-            srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
-         fi
-      done
-      wait
+      if [ -f ${timeHere}/.reconstructDone ]; then
+         echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
+         for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+            if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+               srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+            fi
+         done
+         wait
+         for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+            if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+               srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+            fi
+         done
+         wait
+      else
+         echo "Cannot remove time ${timeHere} in the ./bakDir/bak.processor* directories"
+         echo "Because the reconstruction is not marked with ${timeHere}/.reconstructDone"
+         echo "Something has gone wrong. Please revise the log files to catch the problem"
+         echo "Exiting"; exit 1
+      fi
    fi
 done
 

@@ -43,7 +43,8 @@ foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict |
 #reconstructTimes="-1"
 #reconstructTimes="20"
 #reconstructTimes="50,60,70,80,90"
-reconstructTimes="0:10"
+#reconstructTimes="0:10"
+reconstructTimes="10:24"
 unset arrayReconstruct #This global variable will be re-created in the function below
 generateReconstructArray "$reconstructTimes" $insideDir;success=$? #Calling fucntion to generate "arrayReconstruct"
 if [ $success -ne 0 ]; then
@@ -119,7 +120,8 @@ echo "Times to be reconstructed are:"
 echo "${realToDoReconstruct[@]}"
 
 #----------------------------------------------
-#NOTE: Executing the following steps in batches of size $maxTimeTransfersFromOverlays:
+#NOTE: Executing the following steps in batches within a while loop.
+#      In each cycle of the loop, a batch of size $maxTimeTransfersFromOverlays will be processed.
 #----------------------------------------------
 if [ $countRec -gt 0 ]; then
    maxTimeTransfersFromOverlays=10
@@ -179,9 +181,11 @@ if [ $countRec -gt 0 ]; then
       
       ## 10. Reconstruct all times for this batch.
       echo "Start reconstruction"
-      srun -n 1 -N 1 singularity exec $theImage reconstructPar -time ${timeString} 2>&1 | tee $logsDir/log.reconstructPar.$SLURM_JOBID.${hereToDoReconstruct[0]}
+      logFileHere=$logsDir/log.reconstructPar.${SLURM_JOBID}_${hereToDoReconstruct[0]}-${hereToDoReconstruct[-1]}
+      srun -n 1 -N 1 singularity exec $theImage reconstructPar -time ${timeString} 2>&1 | tee $logFileHere
       
       ## 11. Mark successfully reconstructed times with the "flag" file: .reconstructDone, and remove the decomposed time results
+      noErrors="true"
       for ii in ${!arrayReconstruct[@]}; do
          timeHere=${arrayReconstruct[ii]}
          indexInHereTodo=$(getIndex "${timeHere}" "${hereToDoReconstruct[@]}")
@@ -208,7 +212,7 @@ if [ $countRec -gt 0 ]; then
                       checkOn="true"
                   fi
                fi
-            done < $logsDir/log.reconstructPar.$SLURM_JOBID.${hereToDoReconstruct[0]}
+            done < $logFileHere
          
             ###11.2 If reconstruction was correct, mark the reconstructed folder
             if [ "${correctReconstruct[ii]}" = "true" ]; then
@@ -216,33 +220,81 @@ if [ $countRec -gt 0 ]; then
                echo "Reconstruction finished, and file ${timeHere}/.reconstructionDone created."
             else
                echo "Check why Time ${timeHere} failed in reconstruction"
+               noErrors="false"
             fi
          fi
-         ###11.3 Deleting decomposed results, except those indicated to be kept
-         indexKeep=$(getIndex "${timeHere}" "${keepTimesArr[@]}")
-         if [ $indexKeep -eq -1 ] && \
-            [ $(echo "$timeHere <= ${realToDoReconstruct[((kNext-1))]}" | bc -l) -eq 1 ] && \
-            [ $(echo "$timeHere >= ${realToDoReconstruct[$kStart]}" | bc -l) -eq 1 ]; then
-            echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
-            for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-               if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
-               fi
-            done
-            wait
-            for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-               if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
-               fi
-            done
-            wait
-         fi
       done
+      ## 12. Remove the decomposed time results if they have been successfully reconstructed (except those indicated to be kept)
+      if [ "${noErrors}" = "true" ]; then
+         for ii in ${!arrayReconstruct[@]}; do
+            timeHere=${arrayReconstruct[ii]}
+            indexKeep=$(getIndex "${timeHere}" "${keepTimesArr[@]}")
+            if [ $indexKeep -eq -1 ] && \
+               [ $(echo "$timeHere <= ${realToDoReconstruct[((kNext-1))]}" | bc -l) -eq 1 ] && \
+               [ $(echo "$timeHere >= ${realToDoReconstruct[$kStart]}" | bc -l) -eq 1 ]; then
+               echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
+               for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+                  if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+                     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+                  fi
+               done
+               wait
+               for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+                  if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+                     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+                  fi
+               done
+               wait
+            fi
+         done
+      else
+         echo "There were some errors during reconstruction. This script will stop here"
+         echo "Please check the log files to investigate the possible sources of reconstruction errors"
+         echo "Decomposed results currently in the host will not be removed to assist with the investigation"
+         echo "Exiting"; exit 1
+      fi
       kStart=$kNext
    done
 else
    echo "The times asked to be reconstructed are already reconstructed"
 fi
+
+#13. As a final step, remove any decomposed time result that was left in the host file system, but to be reomoved
+#    (as it was already reconstructed successfully and is not indicated to be kept)
+##13.1 Generating the array of existing decomposed times in the local host
+unset arrayReconstruct #This global variable will be re-created in the function below
+generateReconstructArray "${keepTimesArr[0]}:${keepTimesArr[-1]}" "bak";success=$? #Calling function to generate "arrayReconstruct"
+if [ $success -ne 0 ]; then
+   echo "Failed creating the arrayReconstruct"
+   echo "Exiting";exit 1
+fi
+##13.2 Deleting decomposed results, except those indicated to be kept
+for ii in ${!arrayReconstruct[@]}; do
+   timeHere=${arrayReconstruct[ii]}
+   indexKeep=$(getIndex "${timeHere}" "${keepTimesArr[@]}")
+   if [ $indexKeep -eq -1 ]; then
+      if [ -f ${timeHere}/.reconstructDone ]; then
+         echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
+         for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+            if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+               srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+            fi
+         done
+         wait
+         for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+            if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+               srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+            fi
+         done
+         wait
+      else
+         echo "Cannot remove time ${timeHere} in the ./bakDir/bak.processor* directories"
+         echo "Because the reconstruction is not marked with ${timeHere}/.reconstructDone"
+         echo "Something has gone wrong. Please revise the log files to catch the problem"
+         echo "Exiting"; exit 1
+      fi 
+   fi
+done
 
 #X. Final step
 echo "Script done"

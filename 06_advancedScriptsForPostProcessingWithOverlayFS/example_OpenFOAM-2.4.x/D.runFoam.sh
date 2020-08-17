@@ -105,5 +105,9 @@ else
    fi
 fi
 
+#10. List the existing times inside the ./overlayFSDir/overlay0 
+echo "Listing the available times inside ./overlayFSDir/overlay0"
+srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 $theImage ls -lat processor0/
+
 #X. Final step
 echo "Script done"

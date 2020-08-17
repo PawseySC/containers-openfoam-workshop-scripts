@@ -106,7 +106,7 @@ wait
 
 #9. Execute the case using the softlinks to write inside the overlays
 echo "About to execute the case"
-srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c 'singularity exec --overlay overlay${SLURM_PROCID} '"$theImage"' pimpleFoam -parallel 2>&1' | tee $logsDir/log.pimpleFoam.$SLURM_JOBID
+srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES bash -c "singularity exec --overlay "'overlay${SLURM_PROCID}'" $theImage pimpleFoam -parallel 2>&1" | tee $logsDir/log.pimpleFoam.$SLURM_JOBID
 echo "Execution finished"
 
 #10. List the existing times inside the overlays 
