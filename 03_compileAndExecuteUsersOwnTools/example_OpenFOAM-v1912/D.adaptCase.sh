@@ -11,7 +11,7 @@ module load singularity
 #2. Defining the container to be used
 theRepo=/group/singularity/pawseyRepository/OpenFOAM
 theContainerBaseName=openfoam
-theVersion=7
+theVersion=v1912
 theProvider=pawsey
 theImage=$theRepo/$theContainerBaseName-$theVersion-$theProvider.sif
  
