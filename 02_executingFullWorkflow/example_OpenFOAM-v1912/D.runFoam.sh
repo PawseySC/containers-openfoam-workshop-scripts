@@ -75,11 +75,11 @@ sed -i 's,^writeInterval.*,writeInterval    '"$foam_writeInterval"';,' system/co
 sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
 
 #10. Defining the solver
-of_solver=pimpleFoam
+theSolver=pimpleFoam
 
 #11. Execute the case 
 echo "About to execute the case"
-srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES singularity exec $theImage $of_solver -parallel 2>&1 | tee $logsDir/log.$theSolver.$SLURM_JOBID
+srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES singularity exec $theImage $theSolver -parallel 2>&1 | tee $logsDir/log.$theSolver.$SLURM_JOBID
 echo "Execution finished"
 
 #X. Final step

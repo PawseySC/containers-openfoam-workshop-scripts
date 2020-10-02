@@ -75,14 +75,14 @@ sed -i 's,^writeInterval.*,writeInterval    '"$foam_writeInterval"';,' system/co
 sed -i 's,^purgeWrite.*,purgeWrite    '"$foam_purgeWrite"';,' system/controlDict
 
 #10. Defining the solver
-of_solver=myPimpleFoam
+theSolver=myPimpleFoam
 
 #11. Defining the projectUserDir to be mounted into the path of the internal WM_PROJECT_USER_DIR
 projectUserDir=$SLURM_SUBMIT_DIR/projectUserDir
 
 #12. Execute the case 
 echo "About to execute the case"
-srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES singularity exec -B $projectUserDir:/home/ofuser/OpenFOAM/ofuser-$theVersion $theImage $of_solver -parallel 2>&1 | tee $logsDir/log.$theSolver.$SLURM_JOBID
+srun -n $SLURM_NTASKS -N $SLURM_JOB_NUM_NODES singularity exec -B $projectUserDir:/home/ofuser/OpenFOAM/ofuser-$theVersion $theImage $theSolver -parallel 2>&1 | tee $logsDir/log.$theSolver.$SLURM_JOBID
 echo "Execution finished"
 
 #X. Final step
