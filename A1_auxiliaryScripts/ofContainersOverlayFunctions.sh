@@ -13,6 +13,12 @@ local destinyString=$2 #String defining the destiny of the files to be copied
 local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
 local replace=$4 #Replace files/directories if they already exist? "true" or "false"
 #
+#No global variables are created back
+#
+#The function returns 0 if successful and other if the test failed 
+#(return value should be catch with $? immediately after usage)
+#
+#- - - - - - - - USE:
 #IMPORTANT:#It needs to be called like:
 #copyIntoOverlayII "$sourceStringOrg" "$destinyStringOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg"
 #The source and destiny strings my contain the for counter '${ii}', but it needs to be defined with single quotes
@@ -20,11 +26,6 @@ local replace=$4 #Replace files/directories if they already exist? "true" or "fa
 #Evaluation is performed within the for loop inside the function
 #For example,
 #copyIntoOverlayII './bakDir/bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true"
-#
-#No global variables are created back
-#
-#The function returns 0 if successful and other if the test failed 
-#(return value should be catch with $? immediately after usage)
 #
 #...............................................................
 local cpOptions=""
@@ -71,26 +72,28 @@ function copyResultsIntoBak {
 #This function receives No Global variables:
 #
 #This function receives the following arguments:
-local insideDir=$1 #the "base" directory where results are going to be written inside the overlays
-local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decomposition
-local replace=$3 #Replace folders if they already exist? "true" or "false"
-shift 3
+local insideDir=$1 #the "base" directory where results have been written inside the overlay
+local surnameTag=$2 #the surname tag of the overlay* files to be processed, like: overlay_123456_A (then surnameTag given should be: surnameTag="_123456_A"
+local foam_numberOfSubdomains=$3 #the number of subdomains in the OpenFOAM decomposition
+local replace=$4 #Replace folders if they already exist? "true" or "false"
+shift 4
 local arrayHere=("$@") #has the array of the times to be transferred
-#
-#IMPORTANT:#It needs to be called like:
-#copyResultsIntoBak "$insideDirOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg" "${arrayOrg[@]}"
-#IMPORTANT:Note that the original array from the calling scritpt needs to be expanded as an argument
 #
 #No global variables are created back
 #
 #The function returns 0 if successful and other if the test failed 
 #(return value should be catch with $? immediately after usage)
 #
+#- - - - - - - - USE:
+#IMPORTANT:#It needs to be called like:
+#copyResultsIntoBak "$insideDirOrg" "$surnameTagOrg" "$foam_numberOfSubdomainsOrg" "$replaceOrg" "${arrayOrg[@]}"
+#IMPORTANT:Note that the original array from the calling script needs to be expanded as an argument
+#
 #...............................................................
-echo "Copying files from the overlays into the ./bakDir/bak.processors directories"
+echo "Copying results inside the ./overlayFSDir/overlay"'*'"${surnameTag} files"
 local jj=0
 for jj in ${arrayHere[@]}; do
-   #Checking if the folder already exists in bak.processor0 
+   #Checking if the time-result already exists in bak.processor0 
    local proceed="true"
    if [ -d ./bakDir/bak.processor0/${jj} ]; then
       if [ "$replace" == "false" ]; then
@@ -103,11 +106,12 @@ for jj in ${arrayHere[@]}; do
       fi
    fi
    if [ "$proceed" == "true" ]; then
-      echo "Copying time ${jj} to all the bak.procesors"
+      echo "Copying result-time $insideDir/processor"'*'"/${jj} (inside ./overlayFSDir/overlay"'*'"${surnameTag})"
+      echo "Into ./bakDir/bak.processor"'*'"/${jj}"
       local ii
       for ii in $(seq 0 $((foam_numberOfSubdomains -1))); do
          echo "Writing into ./bakDir/bak.processor${ii}"
-         srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bakDir/bak.processor${ii}/ &
+         srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii}${surnameTag} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bakDir/bak.processor${ii}/ &
       done
       wait
    fi
@@ -210,6 +214,184 @@ fi
 #Testing and returning the value of the test:
 srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 ls -lh ./overlayFSDir/overlay0
 return $?
+}
+#End ===========================================================
+
+#---------------------------------------------------------------
+#---------------------------------------------------------------
+function generateReconstructArray {
+#Generate the global array of times to be reconstructed
+#
+#This function receives No Global variables:
+#
+#This function receives the following arguments:
+local reconstructTimes="$1" #the indication of the reconstruct times we are looking for
+local whatSource="$2" #If the value is "bak", then results in ./bakDir/bak.processors* will be used.
+                      #Otherwise, $whatSource will receive the path of the directory inside the overlay* files
+                      #where the results are being stored
+local surnameTag="$3" #the surname tag of the overlay* files to be processed, like: overlay_123456_A (then surnameTag given should be: surnameTag="_123456_A"
+#
+#Examples of the 5 accepted formats for the reconstructTimes parameter are:
+#reconstructTimes="all" #Means, all the available times will be included in the array generated
+#reconstructTimes="-5" #Means, the last 5 available times will be included
+#reconstructTimes="+3" #Means, the first 3 available times will be included
+#reconstructTimes="60.1" #Means the exact given time will be included if available
+#reconstructTimes="50,60,70,80,90" #Means, the exact times in the list will be included if available
+#reconstructTimes="55.2:69" #Means the available times within the range will be included
+#
+#These global variables are created back
+unset arrayReconstruct
+arrayReconstruct[0]=-1 #Global array with the times to be reconstructed (will grow to size needed)
+#
+#The function returns 0 if successful and other if the test failed 
+#(return value should be catch with $? immediately after usage)
+#
+#- - - - - - - - USE:
+#When creating the arrayReconstruct array from content of ./bakDir/bak.processor* directories DO:
+#DO:generateReconstructArray "$reconstructTimes" "bak";success=$?
+#
+#When creating the arrayReconstruct array from content of ./overlayFSDir/overlay*${surnameTag} files DO:
+#DO:generateReconstructArray "$reconstructTimes" $insideDir $surnameTag;success=$?
+#...............................................................
+#Generating a list of existing time directories
+if [ "$whatSource" == "bak" ]; then
+   echo "Creating a list of existing time directories in ${whatSource}.processor0"
+   ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > listTimes.$SLURM_JOBID
+else
+   local insideDir=$whatSource
+   if [ ! -f ./overlayFSDir/overlay0${surnameTag} ]; then
+      echo "Failure in function generateReconstructArray:"
+      echo "File ./overlayFSDir/overlay0${surnameTag} does not exist"
+      return 1
+   fi
+   echo "Creating a list of existing time directories in ${insideDir}/processor0 of ./overlayFSDir/overlay0${surnameTag}"
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay0${surnameTag} docker://ubuntu:18.04 bash -c \
+       "ls -dt $insideDir/processor0/[0-9]* | sed 's,$insideDir/processor0/,,' > listTimes.$SLURM_JOBID"
+fi
+sort -n listTimes.$SLURM_JOBID -o listTimesSorted.$SLURM_JOBID
+rm listTimes.$SLURM_JOBID
+local i=0
+local timeDirArr[0]=-1
+echo "Existing times are:"
+while read textTimeDir; do
+   timeDirArr[$i]=$textTimeDir
+   echo "The $i timeDir is: ${timeDirArr[$i]}"
+   ((i++))
+done < listTimesSorted.$SLURM_JOBID
+local nTimeDirectories=$i
+if [ $nTimeDirectories -eq 0 ]; then
+   echo "NO time directories available for the case in ./overlayFSDir/overlay0${surnameTag}"
+else
+   echo "The maxTimeSeen=${timeDirArr[$((nTimeDirectories - 1))]}"
+fi
+
+# Generate the reconstruction array 
+echo "Generating the reconstruction array (global array) \"arrayReconstruct\""
+echo "Given setting is reconstructTimes=$reconstructTimes"
+local nReconstruct=0
+local ii=0
+local realExpr='^[+-]?[0-9]+([.][0-9]+)?$'
+local intExpr='^[+-]?[0-9]+$'
+local signedPositiveIntExpr='^[+][0-9]+$'
+local signedNegativeIntExpr='^[-][0-9]+$'
+if [[ $reconstructTimes =~ $realExpr ]]; then #if a single real value was given
+   if [ $(echo "$reconstructTimes >= 0" | bc -l) -eq 1 ]; then #if that single value is positive
+      if [[ $reconstructTimes =~ $signedPositiveIntExpr ]]; then #if (+N), pick the first N times
+         echo "Using the reconstructTimes=+N notation"
+         echo "Picking the first N=$(( 1 * reconstructTimes)) existing times from the source of decomposed results"
+         for ii in $(seq 0 $((reconstructTimes-1))); do
+            local indexHere=$ii
+            if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
+               arrayReconstruct[$nReconstruct]=${timeDirArr[$indexHere]}
+               (( nReconstruct++ ))
+            fi
+         done
+      else #Treat as a single time number
+         echo "Using the single time given notation"
+         local hereTime=$reconstructTimes
+         local indexHere=$(getIndex "$hereTime" "${timeDirArr[@]}")
+         if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
+            arrayReconstruct[$nReconstruct]="$hereTime"
+            (( nReconstruct++ ))
+         fi
+      fi
+   else #For negative numbers
+      if [[ $reconstructTimes =~ $signedNegativeIntExpr ]]; then #if negative (-N), pick the last N times
+         echo "Using the reconstructTimes=-N notation"
+         echo "Picking the last N=$(( -1 * reconstructTimes)) existing times from the source of decomposed results"
+         for ii in $(seq $reconstructTimes -1); do
+            local indexHere=$((nTimeDirectories + ii))
+            if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
+               arrayReconstruct[$nReconstruct]=${timeDirArr[$indexHere]}
+               (( nReconstruct++ ))
+            fi
+         done
+      else
+         echo "Failure in function generateReconstructArray:"
+         echo "The single value given is a negative float: reconstructTimes=$reconstructTimes"
+         echo "This cannot be interpreted correctly for reconstruction"
+         return 1
+      fi
+   fi
+else
+   if [ "$reconstructTimes" = "all" ]; then #pick all the existing times
+      echo "Using the reconstructTimes=\"all\" notation"
+      echo "Picking all the existing times from the source of decomposed results"
+      for ii in $(seq 0 $((nTimeDirectories - 1))); do
+         arrayReconstruct[$nReconstruct]=${timeDirArr[$ii]}
+         (( nReconstruct++ ))
+      done
+   elif [[ "$reconstructTimes" == *":"* ]]; then #if using notation with "first:last", pick from start to end (no code to deal with increment in notation)
+      echo "Using the range notation reconstructTimes=first:last"
+      echo "Picking all the existing times within the range from the source of decomposed results"
+      local firstTime=${reconstructTimes%%:*}
+      local lastTime=${reconstructTimes##*:}
+      local indexFirst=$(getIndexGE "$firstTime" "${timeDirArr[@]}")
+      local indexLast=$(getIndexLE "$lastTime" "${timeDirArr[@]}")
+      echo "firstTime=$firstTime indexFirst=$indexFirst"
+      echo "lastTime=$lastTime indexLast=$indexLast"
+      for ii in $(seq $indexFirst $indexLast); do
+         if [ $ii -ge 0 ] && [ $ii -lt $nTimeDirectories ] ; then
+            arrayReconstruct[$nReconstruct]=${timeDirArr[$ii]}
+            (( nReconstruct++ ))
+         fi
+      done
+   elif [[ "$reconstructTimes" == *","* ]]; then #if using notation with comma separated list "a,b,c", pick them
+      echo "Using the comma separated list notation"
+      local nLast=$(awk -F "," '{print NF-1}' <<< $reconstructTimes)
+      local rest=$reconstructTimes
+      for ii in $(seq $nReconstruct $nLast); do
+         local hereTime=${rest%%,*}
+         local indexHere=$(getIndex "$hereTime" "${timeDirArr[@]}")
+         if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
+            arrayReconstruct[$nReconstruct]="$hereTime"
+            (( nReconstruct++ ))
+         fi
+         rest=${rest#*,}
+      done
+   fi
+fi
+
+#Checking reconstructArray settings:
+echo "The created reconstruction array has:"
+echo "nReconstruct=$nReconstruct"
+if [ $nReconstruct -gt 0 ]; then
+   nLast=$(( nReconstruct - 1 ))
+   for ii in $(seq 0 $nLast); do
+      echo "arrayReconstruct[$ii]=${arrayReconstruct[ii]}"
+   done
+   rm listTimesSorted.$SLURM_JOBID
+   return 0
+else
+   echo "Failure in function generateReconstructArray:"
+   echo "Global arrayReconstruct could not be created with those settings. Check what failed"
+   if [ "$whatSource" == "bak" ]; then
+      echo "The list of existing times in ./bakDir/bak.processor0 is in listTimesSorted.$SLURM_JOBID file"
+   else
+      echo "The list of existing times inside ./overlayFSDir/overlay0${surnameTag} ($insideDir/processor0) is in listTimesSorted.$SLURM_JOBID file"
+   fi
+   return 1
+fi
 }
 #End ===========================================================
 
@@ -321,145 +503,68 @@ return 255
 
 #---------------------------------------------------------------
 #---------------------------------------------------------------
-function generateReconstructArray {
-#Generate the global array of times to be reconstructed
+function getNResultTime {
+#Function to find the second last time in the available times in the $whatSource
 #
 #This function receives No Global variables:
 #
-#This function receives the following arguments:
-local reconstructTimes="$1" #the indication of the reconstruct times we are looking for
+#This function receives 2 arguments:
+local givenIndex="$1" #Index in the sorted array of available results we are looking for
 local whatSource="$2" #If the value is "bak", then results in ./bakDir/bak.processors* will be used.
                      #Otherwise, it indicates where results are being created inside the overlay* files
 #
-#Examples of the 5 accepted formats for the reconstructTimes parameter are:
-#reconstructTimes="all" #Means, all the available times will be included in the array generated
-#reconstructTimes="-5" #Means, the last 5 available times will be included
-#reconstructTimes="60.1" #Means the exact given time will be included if available
-#reconstructTimes="50,60,70,80,90" #Means, the exact times in the list will be included if available
-#reconstructTimes="55.2:69" #Means the available times within the range will be included
-
+#No global variables are created back
 #
-#These global variables are created back
-unset arrayReconstruct
-arrayReconstruct[0]=-1 #Global array with the times to be reconstructed (will grow to size needed)
+#IMPORTANT:The function retuns the secondLastTime value with an echo, so it needs to be received with $().
+#So, it needs to be called like:
+#nTimeInOverlay=$(getNResultTime N $insideDir)
+#or
+#nTimeInBak=$(getNResultTime N "bak")
 #
-#The function returns 0 if successful and other if the test failed 
+#The function success or failure returns 0 if successful and other if the test failed 
 #(return value should be catch with $? immediately after usage)
 #
 #...............................................................
 #Generating a list of existing time directories
 if [ "$whatSource" == "bak" ]; then
-   echo "Creating a list of existing time directories in ${whatSource}.processor0"
    ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > listTimes.$SLURM_JOBID
 else
-   echo "Creating a list of existing time directories in ${whatSource}/processor0 of ./overlayFSDir/overlay0"
    srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 bash -c \
        "ls -dt $whatSource/processor0/[0-9]* | sed 's,$whatSource/processor0/,,' > listTimes.$SLURM_JOBID"
 fi
+
+#Sorting the list
 sort -n listTimes.$SLURM_JOBID -o listTimesSorted.$SLURM_JOBID
 rm listTimes.$SLURM_JOBID
 local i=0
 local timeDirArr[0]=-1
-echo "Existing times are:"
+
+#Build the array and count the number of time directories
 while read textTimeDir; do
    timeDirArr[$i]=$textTimeDir
-   echo "The $i timeDir is: ${timeDirArr[$i]}"
    ((i++))
 done < listTimesSorted.$SLURM_JOBID
 local nTimeDirectories=$i
-if [ $nTimeDirectories -eq 0 ]; then
-   echo "NO time directories available for the case in ./overlayFSDir/overlay0"
-else
-   echo "The maxTimeSeen=${timeDirArr[$((nTimeDirectories - 1))]}"
+if [ $nTimeDirectories -eq 0 ]; then #Return error if no time directories
+   echo "-1"
+   return 255
+fi
+local maxIndex=$((nTimeDirectories - 1))
+local minIndex=$((-nTimeDirectories))
+
+#Define the useful index
+usefulIndex=$givenIndex
+if [ $givenIndex -gt $maxIndex ]; then
+   usefulIndex=$maxIndex
+elif [ $givenIndex -lt $minIndex ]; then
+   usefulIndex=$minIndex
 fi
 
-
-# Generate the reconstruction array 
-echo "Generating the reconstruction array (global array) \"arrayReconstruct\""
-echo "Given setting is reconstructTimes=$reconstructTimes"
-local nReconstruct=0
-local ii=0
-local re='^[+-]?[0-9]+([.][0-9]+)?$'
-local reInt='^[+-]?[0-9]+$'
-if [[ $reconstructTimes =~ $re ]]; then
-   if [ $(echo "$reconstructTimes >= 0" | bc -l) -eq 1 ]; then #if a single positive time is given, pick it
-      echo "Using the single time give notation"
-      local hereTime=$reconstructTimes
-      local indexHere=$(getIndex "$hereTime" "${timeDirArr[@]}")
-      if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
-         arrayReconstruct[$nReconstruct]="$hereTime"
-         (( nReconstruct++ ))
-      fi
-   elif [[ $reconstructTimes =~ $reInt ]]; then #if negative (-N), pick the last N times
-      echo "Using the reconstructTimes=-N notation"
-      echo "Picking the last N=$(( -1 * reconstructTimes)) existing times from the source of decomposed results"
-      for ii in $(seq $reconstructTimes -1); do
-         local indexHere=$((nTimeDirectories + ii))
-         if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
-            arrayReconstruct[$nReconstruct]=${timeDirArr[$((nTimeDirectories + ii))]}
-            (( nReconstruct++ ))
-         fi
-      done
-   fi
-else
-   if [ "$reconstructTimes" = "all" ]; then #pick all the existing times
-      echo "Using the reconstructTimes=\"all\" notation"
-      echo "Picking all the existing times from the source of decomposed results"
-      for ii in $(seq 0 $((nTimeDirectories - 1))); do
-         arrayReconstruct[$nReconstruct]=${timeDirArr[$ii]}
-         (( nReconstruct++ ))
-      done
-   elif [[ "$reconstructTimes" == *":"* ]]; then #if using notation with "first:last", pick from start to end (no code to deal with increment in notation)
-      echo "Using the range notation reconstructTimes=first:last"
-      echo "Picking all the existing times within the range from the source of decomposed results"
-      local firstTime=${reconstructTimes%%:*}
-      local lastTime=${reconstructTimes##*:}
-      local indexFirst=$(getIndexGE "$firstTime" "${timeDirArr[@]}")
-      local indexLast=$(getIndexLE "$lastTime" "${timeDirArr[@]}")
-      echo "firstTime=$firstTime indexFirst=$indexFirst"
-      echo "lastTime=$lastTime indexLast=$indexLast"
-      for ii in $(seq $indexFirst $indexLast); do
-         if [ $ii -ge 0 ] && [ $ii -lt $nTimeDirectories ] ; then
-            arrayReconstruct[$nReconstruct]=${timeDirArr[$ii]}
-            (( nReconstruct++ ))
-         fi
-      done
-   elif [[ "$reconstructTimes" == *","* ]]; then #if using notation with comma separated list "a,b,c", pick them
-      echo "Using the comma separated list notation"
-      local nLast=$(awk -F "," '{print NF-1}' <<< $reconstructTimes)
-      local rest=$reconstructTimes
-      for ii in $(seq $nReconstruct $nLast); do
-         local hereTime=${rest%%,*}
-         local indexHere=$(getIndex "$hereTime" "${timeDirArr[@]}")
-         if [ $indexHere -ge 0 ] && [ $indexHere -lt $nTimeDirectories ] ; then
-            arrayReconstruct[$nReconstruct]="$hereTime"
-            (( nReconstruct++ ))
-         fi
-         rest=${rest#*,}
-      done
-   fi
-fi
-
-#Checking reconstructArray settings:
-echo "The created reconstruction array has:"
-echo "nReconstruct=$nReconstruct"
-if [ $nReconstruct -gt 0 ]; then
-   nLast=$(( nReconstruct - 1 ))
-   for ii in $(seq 0 $nLast); do
-      echo "arrayReconstruct[$ii]=${arrayReconstruct[ii]}"
-   done
-   rm listTimesSorted.$SLURM_JOBID
-   return 0
-else
-   echo "Global arrayReconstruct could not be created with those settings. Check what failed"
-   if [ "$whatSource" == "bak" ]; then
-      echo "The list of existing times in ./bakDir/bak.processor0 is in listTimesSorted.$SLURM_JOBID file"
-   else
-      echo "The list of existing times inside ./overlayFSDir/overlay0 ($whatSource/processor0) is in listTimesSorted.$SLURM_JOBID file"
-   fi
-   return 1
-fi
-}
+#Return the useful value
+rm listTimesSorted.$SLURM_JOBID
+echo "${timeDirArr[$usefulIndex]}"
+return 0
+} 
 #End ===========================================================
 
 #---------------------------------------------------------------

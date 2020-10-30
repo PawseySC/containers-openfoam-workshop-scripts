@@ -21,6 +21,7 @@ else
 fi
 
 #2. Check existence of the case
+cd $SLURM_SUBMIT_DIR
 if [ -d $caseDir ]; then
    cd $caseDir
    echo "pwd=$(pwd)"
@@ -63,7 +64,7 @@ else
    echo "Exiting";exit 1
 fi
 
-#6. Creating a first ./overlayFSDir/overlayII file (./overlayFSDir/overlay0)
+#6. Creating the first ./overlayFSDir/overlay* file (./overlayFSDir/overlay0)
 createOverlay0 $overlaySizeGb;success=$? #Calling the function for creating the ./overlayFSDir/overlay0 file
 if [ $success -eq 222 ]; then 
    echo "./overlayFSDir/overlay0 already exists"
@@ -104,7 +105,7 @@ echo "Copying OpenFOAM the files inside ./bakDir/bak.processor* into the ./overl
 #Also note the use of single quotes '...${ii}...' in the place where the number of the overlay${ii} (or processor${ii}) is needed
 copyIntoOverlayII './bakDir/bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true";success=$? 
 if [ $success -ne 0 ]; then 
-   echo "Failed transferring the content of the ./bakDir/bak.processor* directories, exiting"
+   echo "Failed copying ./bakDir/bak.processor* content, exiting"
    echo "Exiting";exit 1
 fi
 
