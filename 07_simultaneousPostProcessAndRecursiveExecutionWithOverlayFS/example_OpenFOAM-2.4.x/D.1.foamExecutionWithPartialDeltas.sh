@@ -1,4 +1,6 @@
 #!/bin/bash -l
+#SBATCH --job-name=solverExecution
+#SBATCH --output="%x-%j.out"
 #SBATCH --ntasks=5
 #SBATCH --ntasks-per-node=28
 #SBATCH --cluster=zeus
@@ -31,7 +33,7 @@ else
    echo "For some reason, the case=$caseDir, does not exist"
    echo "Exiting"; exit 1
 fi
-logsDir=./logs/run
+logsDir=$caseDir/logs/run
 if ! [ -d $logsDir ]; then
    mkdir -p $logsDir
 fi
@@ -60,11 +62,11 @@ foam_startTime=0.0
 #foam_startTime=10.0
 #foam_startTime=40.0
 #foam_endTime=10.0
-foam_endTime=20.0
+#foam_endTime=20.0
 #foam_endTime=40.0
 #foam_endTime=60.0
 #foam_endTime=45.0
-#foam_endTime=100.0
+foam_endTime=100.0
 foam_writeControl=runTime
 foam_deltaT=0.2
 foam_writeInterval=$foam_deltaT #This should be a reasonable writing frequency
@@ -102,8 +104,7 @@ for partial_counter in `seq 1 $maxCycles`; do
       partial_startFrom=$foam_startFrom
       partial_startTime=$foam_startTime
    else
-      echo "Corruption of latest results is common when previous job hit the walltime during writing of results"
-      echo "Starting from the secondLastTime available to avoid common corruption in the latest saved results"
+      echo "Starting from the secondLastTime available to avoid possible wrong-written results in latest time"
       partial_startFrom=startTime
       partial_startTime=$(getNResultTime -2 $insideDir);success=$? #Calling function to obtain the secondLast Time available (-2)
       if [ $success -ne 0 ]; then
@@ -114,8 +115,10 @@ for partial_counter in `seq 1 $maxCycles`; do
    echo "partial_startFrom=$partial_startFrom"
    echo "partial_startTime=$partial_startTime"
 
-   #9.1 If more than two result directories are present in the overlay* files, then use a new one
-   reconstructTimes=all
+   #9.1 If more than two result directories are present in the overlay* files, then:
+   #    A. rename exiting overlay* files (and create a new ones) (done by D.2.setupNewOverlayPerPartialDelta.sh)
+   #    B. submit a reconstruction job for the already existing results in the renamed overlay*_JOBID_I files.
+   reconstructTimes="all"
    unset arrayReconstruct #This global variable will be re-created in the function below
    surnameTag=""
    generateReconstructArray "$reconstructTimes" $insideDir $surnameTag;success=$? #Calling fucntion to generate "arrayReconstruct"
@@ -126,8 +129,19 @@ for partial_counter in `seq 1 $maxCycles`; do
    nResults=${#arrayReconstruct[@]}
    echo "There are $nResults results directories in ./overlayFSDir/overlay0"
    if [ $nResults -ge 3 ]; then
-      echo "A new set of overlay files will be created"
+      echo "Executing script for renaming existing overlay* files and creating new ones"
       . $SLURM_SUBMIT_DIR/D.2.setupNewOverlayPerPartialDelta.sh
+      partial_previousCounter=$((partial_counter-1))
+      newSurnameTag="_${SLURM_JOBID}_${partial_previousCounter}"
+      echo "Submitting reconstruction for results in: ./overlayFSDir/overlay*${newSurnameTag} files" 
+      pathHere=$PWD
+      cd $SLURM_SUBMIT_DIR
+      sbatch --job-name=reconstruct${newSurnameTag} \
+             --export="surnameTag=${newSurnameTag},reconstructTimes=${reconstructTimes}" \
+             --clusters=zeus \
+             ${SLURM_SUBMIT_DIR}/E.0.reconstruct-recursive-template.sh
+      echo "AEG:D.1: reconstructTimes=$reconstructTimes"
+      cd $pathHere
    else
       echo "The same set of overlay files will be used for this partial srun"
    fi
@@ -160,11 +174,11 @@ for partial_counter in `seq 1 $maxCycles`; do
 
    #9.5 Exiting if the foam_endTime has been reached
    lastTimeReached=$(getNResultTime -1 $insideDir);success=$? #Calling function to obtain the Last Time result available (-1)
-   echo "lastTimeReached=$lastTimeReached"
    if [ $success -ne 0 ]; then
       echo "Failed obtaining the Last Time (-1) available"
       echo "Exiting";exit 1
    fi
+   echo "lastTimeReached=$lastTimeReached"
    st=`echo "$lastTimeReached >= $foam_endTime" | bc`
    if [ $st -eq 1 ]; then
       echo "lastTimeReached ($lastTimeReached) >= foam_endTime ($foam_endTime)"
@@ -187,7 +201,7 @@ else
       echo "Exiting";exit 1
    fi
    replace="false"
-   copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
+   copyResultsIntoBak "$insideDir" "$surnameTag" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
    if [ $success -ne 0 ]; then
       echo "Failed transferring files into ./bakDir/bak.processor* directories"
       echo "Exiting";exit 1

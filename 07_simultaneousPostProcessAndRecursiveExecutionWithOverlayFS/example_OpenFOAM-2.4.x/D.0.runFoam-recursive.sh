@@ -1,6 +1,8 @@
 #!/bin/bash -l
 #-----------------------
 ##Defining the needed resources with SLURM parameters (modify as needed)
+#SBATCH --job-name=recursiveExecution
+#SBATCH --output="%x-%j.out"
 #SBATCH --ntasks=5
 #SBATCH --ntasks-per-node=28
 #SBATCH --cluster=zeus
@@ -53,9 +55,11 @@ fi
 #         In this case we check for the number of "slurm-XXXX.out" files.
 #         (Remember to check your output files regularly and remove the not needed old ones or the execution may be stoppped.)
 maxSlurmies=25
-slurmies=$(find . -maxdepth 1 -name "slurm*" | wc -l)
+#slurmyBaseName=slurm #Use the base name of the output file
+slurmyBaseName=$SLURM_JOB_NAME #Use the base name of the output file
+slurmies=$(find . -maxdepth 1 -name "${slurmyBaseName}*" | wc -l)
 if [ $slurmies -gt $maxSlurmies ]; then
-   echo "There are slurmies=${slurmies} slurm-XXXX.out files in the directory."
+   echo "There are slurmies=${slurmies} $slurmyBaseName-XXXX.out files in the directory."
    echo "The maximum allowed number of output files is maxSlurmies=${maxSlurmies}"
    echo "This could be a sign of an infinite loop of slurm resubmissions."
    echo "So the script ${thisScript} will exit."

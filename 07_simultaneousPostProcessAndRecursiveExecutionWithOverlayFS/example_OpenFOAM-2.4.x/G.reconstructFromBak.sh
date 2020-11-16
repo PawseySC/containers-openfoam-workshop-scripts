@@ -29,7 +29,7 @@ else
    echo "For some reason, the case=$caseDir, does not exist"
    echo "Exiting"; exit 1
 fi
-logsDir=./logs/post
+logsDir=$caseDir/logs/post
 if ! [ -d $logsDir ]; then
    mkdir -p $logsDir
 fi

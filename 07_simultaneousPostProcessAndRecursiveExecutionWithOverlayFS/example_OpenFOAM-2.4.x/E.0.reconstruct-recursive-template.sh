@@ -1,13 +1,14 @@
 #!/bin/bash -l
 #-----------------------
 ##Defining the needed resources with SLURM parameters (modify as needed)
+#SBATCH --job-name=recursiveReconstruct
+#SBATCH --output="%x-%j.out"
 #SBATCH --ntasks=5
 #SBATCH --ntasks-per-node=28
 #SBATCH --cluster=zeus
-#@@#SBATCH --ntasks-per-node=24
-#@@#SBATCH --cluster=magnus
 #SBATCH --partition=workq
-#SBATCH --time=0:10:00
+##SBATCH --time=0:10:00
+#SBATCH --time=0:01:30
 #SBATCH --export=none
  
 #-----------------------
@@ -53,9 +54,11 @@ fi
 #         In this case we check for the number of "slurm-XXXX.out" files.
 #         (Remember to check your output files regularly and remove the not needed old ones or the execution may be stoppped.)
 maxSlurmies=25
-slurmies=$(find . -maxdepth 1 -name "slurm*" | wc -l)
+#slurmyBaseName=slurm #Use the base name of the output file
+slurmyBaseName=$SLURM_JOB_NAME #Use the base name of the output file
+slurmies=$(find . -maxdepth 1 -name "${slurmyBaseName}*" | wc -l)
 if [ $slurmies -gt $maxSlurmies ]; then
-   echo "There are slurmies=${slurmies} slurm-XXXX.out files in the directory."
+   echo "There are slurmies=${slurmies} $slurmyBaseName-XXXX.out files in the directory."
    echo "The maximum allowed number of output files is maxSlurmies=${maxSlurmies}"
    echo "This could be a sign of an infinite loop of slurm resubmissions."
    echo "So the script ${thisScript} will exit."
@@ -70,6 +73,13 @@ fi
  
 #The following variables will receive a value with the "sbatch --export" submission from the parent job.
 #If this is the first time this script is called, then they will start with the default values given here:
+#: ${var_start_time:="0"}
+#: ${var_end_time:="10"}
+#: ${var_increment:="10"}
+: ${surnameTag:=""}  #surname tag to identify the overlay* file to process
+echo "AEG:E.0.A: reconstructTimes=$reconstructTimes"
+: ${reconstructTimes:="all"} #All the times inside the partial overlay will be reconstructed
+echo "AEG:E.0.B: reconstructTimes=$reconstructTimes"
  
 #Replacing the current values in the parameter/input file used by the executable:
  
@@ -78,6 +88,36 @@ fi
 #-----------------------
 ##Verify that everything that is needed is ready
 #This section is IMPORTANT. For example, it can be used to verify that the results from the parent submission are there. If not, stop execution.
+echo "Checking if previous job finished reconstruction already"
+ls ${slurmyBaseName}* > listSlurms.$SLURM_JOBID
+sort -n listSlurms.$SLURM_JOBID -o listSlurmsSorted.$SLURM_JOBID
+rm listSlurms.$SLURM_JOBID
+nSlurms=0
+while read fileName; do
+   nameArr[$nSlurms]=$fileName
+   ((nSlurms++))
+done < listSlurmsSorted.$SLURM_JOBID
+rm listSlurmsSorted.$SLURM_JOBID
+if [ $nSlurms -gt 1 ]; then
+   prevSlurmFile=${nameArr[-2]}
+   #Check A. Verify if reconstruction finished in the previous job
+   prevReconstruct=$(sed -n '/Times to be reconstructed are:/{n;p}' $prevSlurmFile) 
+   if [ "$prevReconstruct" = "-1" ]; then
+      echo "The previous output file ($prevSlurmFile)"
+      echo "Has the following info:"
+      sed -n '/Times to be reconstructed are:/{N;p}' $prevSlurmFile
+      echo "So the recursive reconstruction has finished."
+      echo "Finishing"; exit 0
+   fi
+   #Check B. Verify if there are no messsages for stopping recursive jobs in the previous log
+   nStops=$(grep -i "Stop recursive jobs if they exist" $prevSlurmFile | wc -l)
+   if [ $nStops -gt 0 ]; then
+      echo "The previous output file ($prevSlurmFile)"
+      echo "Has nStops=$nStops messages with the phrase 'Stop recursive jobs if they exist'"
+      echo "So the recursive reconstruction failed."
+      echo "Exiting"; exit 4
+   fi
+fi
  
 #-----------------------
 ##Submitting the dependent job
@@ -91,8 +131,8 @@ if [ "$useDependentCycle" = "true" ] && [ ${job_iteration} -lt ${job_iteration_m
    #Update the counter of cycle iterations
    (( job_iteration++ ))
    #Update the values needed for the next submission
-   var_start_time=$var_end_time
-   (( var_end_time+=$var_increment ))
+   #var_start_time=$var_end_time
+   #(( var_end_time+=$var_increment ))
    #Dependent Job submission:
    #                         (Note that next_jobid has the ID given by the sbatch)
    #                         For the correct "--dependency" flag:
@@ -100,8 +140,11 @@ if [ "$useDependentCycle" = "true" ] && [ ${job_iteration} -lt ${job_iteration_m
    #                         Use "afterany" when each job is expected to reach walltime.
    #                         Check documentation for other flags available.
    #IMPORTANT: The --export="list_of_exported_vars" guarantees that values are inherited to the dependent job
-   next_jobid=$(sbatch --export="job_iteration=${job_iteration},var_start_time=${var_start_time},var_end_time=${var_end_time},var_increment=${var_increment}" --dependency=afterok:${SLURM_JOB_ID} ${dependentScript} | awk '{print $4}')
-   echo "Dependent with slurm job id ${next_jobid} was submitted"
+   #           Note that continuation-line sign '\' is not separated by a space in order to concatenate the list
+   next_jobid=$(sbatch --job-name=$SLURM_JOB_NAME --partition=$SLURM_JOB_PARTITION \
+       --export="job_iteration=${job_iteration},surnameTag=${surnameTag},reconstructTimes=${reconstructTimes}" \
+       --dependency=singleton ${dependentScript} | awk '{print $4}')
+   echo "Dependent job with slurm ID=${next_jobid} was submitted"
    echo "If you want to stop the submission chain it is recommended to use scancel on the dependent job first"
    echo "Or create a file named: \"stopSlurmCycle\""
    echo "And then you can scancel this job if needed too"
@@ -113,4 +156,5 @@ fi
 ##Run the main executable.
 #(Modify as needed)
 #Syntax should allow restart from a checkpoint
-srun -N $SLURM_JOB_NUM_NODES -n $SLURM_NTASKS ./code.x
+#srun -N $SLURM_JOB_NUM_NODES -n $SLURM_NTASKS ./code.x
+. $SLURM_SUBMIT_DIR/E.1.reconstructFromOverlay.sh

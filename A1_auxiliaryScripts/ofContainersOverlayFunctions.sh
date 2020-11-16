@@ -109,9 +109,15 @@ for jj in ${arrayHere[@]}; do
       echo "Copying result-time $insideDir/processor"'*'"/${jj} (inside ./overlayFSDir/overlay"'*'"${surnameTag})"
       echo "Into ./bakDir/bak.processor"'*'"/${jj}"
       local ii
+      local kk=0
       for ii in $(seq 0 $((foam_numberOfSubdomains -1))); do
          echo "Writing into ./bakDir/bak.processor${ii}"
          srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii}${surnameTag} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bakDir/bak.processor${ii}/ &
+         (( kk++ ))
+         if [ $kk -ge $SLURM_NTASKS ]; then
+            wait
+            kk=0
+         fi
       done
       wait
    fi
@@ -296,7 +302,7 @@ local signedPositiveIntExpr='^[+][0-9]+$'
 local signedNegativeIntExpr='^[-][0-9]+$'
 if [[ $reconstructTimes =~ $realExpr ]]; then #if a single real value was given
    if [ $(echo "$reconstructTimes >= 0" | bc -l) -eq 1 ]; then #if that single value is positive
-      if [[ $reconstructTimes =~ $signedPositiveIntExpr ]]; then #if (+N), pick the first N times
+      if [[ $reconstructTimes =~ $signedPositiveIntExpr ]]; then #Using explicit sign (+N), pick the first N times
          echo "Using the reconstructTimes=+N notation"
          echo "Picking the first N=$(( 1 * reconstructTimes)) existing times from the source of decomposed results"
          for ii in $(seq 0 $((reconstructTimes-1))); do
@@ -306,7 +312,7 @@ if [[ $reconstructTimes =~ $realExpr ]]; then #if a single real value was given
                (( nReconstruct++ ))
             fi
          done
-      else #Treat as a single time number
+      else #If explicit sign was not written, then Treat as a single time number
          echo "Using the single time given notation"
          local hereTime=$reconstructTimes
          local indexHere=$(getIndex "$hereTime" "${timeDirArr[@]}")

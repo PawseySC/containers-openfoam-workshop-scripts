@@ -1,4 +1,6 @@
 #!/bin/bash -l
+#SBATCH --job-name=newOverlays
+#SBATCH --output="%x-%j.out"
 #SBATCH --ntasks=4
 #SBATCH --mem=4G
 #SBATCH --clusters=zeus
@@ -67,7 +69,7 @@ fi
 
 #7. Copy results to be moved into the new overlay* first into the bak.processor* directories
 replace="true"
-copyResultsIntoBak "$insideDir" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
+copyResultsIntoBak "$insideDir" "$surnameTag" "$foam_numberOfSubdomains" "$replace" "${arrayReconstruct[@]}";success=$? #Calling the function to copy time directories into ./bakDir/bak.processor*
 if [ $success -ne 0 ]; then
    echo "Failed transferring $arrayReconstruct[@] decomposed time directories into ./bakDir/bak.processor* directories"
    echo "Exiting";exit 1
@@ -76,7 +78,7 @@ fi
 #8. Rename the existing overlays as the "deposit" of the partial results
 partial_previousCounter=$((partial_counter-1))
 newSurnameTag="_${SLURM_JOBID}_${partial_previousCounter}"
-echo 'Will try to rename ./overlayFSDir/overlay* into ./overlayFSDir/overlay*_${newSurnameTag} files'
+echo 'Will try to rename ./overlayFSDir/overlay* into ./overlayFSDir/overlay*${newSurnameTag} files'
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
     if [ ! -f ./overlayFSDir/overlay${ii} ]; then
        echo "./overlayFSDir/overlay${ii} does not exist"
@@ -84,7 +86,7 @@ for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
        echo "Exiting";exit 1
     else
        echo "Renaming ./overlayFSDir/overlay${ii} into ./overlayFSDir/overlay${ii}${newSurnameTag}"
-       srun -n 1 -N 1 --mem-per-cpu=0 --exclusive mv ./overlayFSDir/overlay${ii} ./overlayFSDir/overlay${ii}_${newSurnameTag}&
+       srun -n 1 -N 1 --mem-per-cpu=0 --exclusive mv ./overlayFSDir/overlay${ii} ./overlayFSDir/overlay${ii}${newSurnameTag}&
     fi
 done
 wait
