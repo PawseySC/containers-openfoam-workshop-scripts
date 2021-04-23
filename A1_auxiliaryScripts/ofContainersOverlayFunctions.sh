@@ -28,6 +28,11 @@ local replace=$4 #Replace files/directories if they already exist? "true" or "fa
 #copyIntoOverlayII './bakDir/bak.processor${ii}/*' "$insideDir/"'processor${ii}/' "$foam_numberOfSubdomains" "true"
 #
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 local cpOptions=""
 if [ "$replace" == "false" ]; then
    cpOptions="-r"
@@ -46,7 +51,7 @@ for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
    echo "sourceStringII=$sourceStringII"
    eval destinyStringII=$destinyString
    echo "destinyStringII=$destinyStringII"
-   srun -n 1 -N 1 --job-name=$name --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii} docker://ubuntu:18.04 cp $cpOptions $sourceStringII $destinyStringII &
+   srun -n 1 -N 1 --job-name=$name --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii} $theImage cp $cpOptions $sourceStringII $destinyStringII &
 done
 wait
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
@@ -90,6 +95,11 @@ local arrayHere=("$@") #has the array of the times to be transferred
 #IMPORTANT:Note that the original array from the calling script needs to be expanded as an argument
 #
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 echo "Copying results inside the ./overlayFSDir/overlay"'*'"${surnameTag} files"
 local jj=0
 for jj in ${arrayHere[@]}; do
@@ -109,14 +119,14 @@ for jj in ${arrayHere[@]}; do
       echo "Copying result-time $insideDir/processor"'*'"/${jj} (inside ./overlayFSDir/overlay"'*'"${surnameTag})"
       echo "Into ./bakDir/bak.processor"'*'"/${jj}"
       local ii
-      local kk=0
+      local usedCores=0
       for ii in $(seq 0 $((foam_numberOfSubdomains -1))); do
          echo "Writing into ./bakDir/bak.processor${ii}"
-         srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii}${surnameTag} docker://ubuntu:18.04 cp -r $insideDir/processor${ii}/${jj} ./bakDir/bak.processor${ii}/ &
-         (( kk++ ))
-         if [ $kk -ge $SLURM_NTASKS ]; then
+         srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii}${surnameTag} $theImage cp -r $insideDir/processor${ii}/${jj} ./bakDir/bak.processor${ii}/ &
+         (( usedCores++ ))
+         if [ $usedCores -ge $SLURM_NTASKS ]; then
             wait
-            kk=0
+            usedCores=0
          fi
       done
       wait
@@ -152,9 +162,14 @@ local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decom
 #(return value should be catch with $? immediately after usage)
 #
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 #Checking if the directories already exist
 echo "Checking if $insideDir/processor0 directory is already there"
-srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 ls -dlh $insideDir/processor0
+srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 $theImage ls -dlh $insideDir/processor0
 local success=$?
 if [ "$success" -eq 0 ]; then
    echo "Directory $insideDir/processor0 already exists. No further internal creation or deletion will be done"
@@ -167,11 +182,11 @@ echo "Creating the directories inside the overlays"
 local ii
 for ii in $(seq 0 $(( foam_numberOfSubdomains - 1 ))); do
    echo "Creating processor${ii} inside overlay${ii}"
-   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii} docker://ubuntu:18.04 mkdir -p $insideDir/processor${ii} &
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay${ii} $theImage mkdir -p $insideDir/processor${ii} &
 done
 wait
 #Testing and returning the value of the test:
-srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 ls -dlh $insideDir/processor0
+srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 $theImage ls -dlh $insideDir/processor0
 return $?
 }
 #End ===========================================================
@@ -194,6 +209,11 @@ local overlaySizeGb=$1 #the size of the file as a first argument (considered in 
 #(return value should be catch with $? immediately after usage)
 #
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 #Checking if an overlay0 already exists
 if [ -f ./overlayFSDir/overlay0 ]; then
    echo "A file named ./overlayFSDir/overlay0 already exists."
@@ -208,17 +228,18 @@ echo "Creating the ./overlayFSDir/overlay0 file"
 echo "The size in Gb is overlaySizeGb=$overlaySizeGb"
 if [ $overlaySizeGb -gt 0 ]; then
    local countSize=$(( overlaySizeGb * 1024 * 1024 ))
-   srun -n 1 -N 1 singularity exec docker://ubuntu:18.04 bash -c " \
-        mkdir -p overlay_tmp/upper && \
+   srun -n 1 -N 1 singularity exec $theImage bash -c " \
+        mkdir -p overlay_tmp/upper overlay_tmp/work && \
         dd if=/dev/zero of=./overlayFSDir/overlay0 count=$countSize bs=1024 && \
-        mkfs.ext3 -d overlay_tmp ./overlayFSDir/overlay0 && rm -rf overlay_tmp \
+        mkfs.ext3 -d overlay_tmp ./overlayFSDir/overlay0 && \
+        rm -rf overlay_tmp \
         "
 else
    echo "Variable overlaySizeGb was not set correctly"
    echo "In theory, this should have been set together with the singularity settings"
 fi 
 #Testing and returning the value of the test:
-srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 ls -lh ./overlayFSDir/overlay0
+srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 $theImage ls -lh ./overlayFSDir/overlay0
 return $?
 }
 #End ===========================================================
@@ -259,6 +280,11 @@ arrayReconstruct[0]=-1 #Global array with the times to be reconstructed (will gr
 #When creating the arrayReconstruct array from content of ./overlayFSDir/overlay*${surnameTag} files DO:
 #DO:generateReconstructArray "$reconstructTimes" $insideDir $surnameTag;success=$?
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 #Generating a list of existing time directories
 if [ "$whatSource" == "bak" ]; then
    echo "Creating a list of existing time directories in ${whatSource}.processor0"
@@ -271,7 +297,7 @@ else
       return 1
    fi
    echo "Creating a list of existing time directories in ${insideDir}/processor0 of ./overlayFSDir/overlay0${surnameTag}"
-   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay0${surnameTag} docker://ubuntu:18.04 bash -c \
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay0${surnameTag} $theImage bash -c \
        "ls -dt $insideDir/processor0/[0-9]* | sed 's,$insideDir/processor0/,,' > listTimes.$SLURM_JOBID"
 fi
 sort -n listTimes.$SLURM_JOBID -o listTimesSorted.$SLURM_JOBID
@@ -531,11 +557,16 @@ local whatSource="$2" #If the value is "bak", then results in ./bakDir/bak.proce
 #(return value should be catch with $? immediately after usage)
 #
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 #Generating a list of existing time directories
 if [ "$whatSource" == "bak" ]; then
    ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > listTimes.$SLURM_JOBID
 else
-   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 bash -c \
+   srun -n 1 -N 1 --mem-per-cpu=0 --exclusive singularity exec --overlay ./overlayFSDir/overlay0 $theImage bash -c \
        "ls -dt $whatSource/processor0/[0-9]* | sed 's,$whatSource/processor0/,,' > listTimes.$SLURM_JOBID"
 fi
 
@@ -630,6 +661,11 @@ local foam_numberOfSubdomains=$2 #the number of subdomains in the OpenFOAM decom
 #(return value should be catch with $? immediately after usage)
 #
 #...............................................................
+# Defining the image to use for overlay checks
+local theRepo=/group/singularity/pawseyRepository/ubuntu
+local theImage=$theRepo/ubuntu-18.04.sif
+
+#...............................................................
 #Removing any softling
 echo "First removing existing soft links"
 local linkList=$(find . -type l -name "proc*")
@@ -647,7 +683,7 @@ done
 wait
 
 #Testing and returning the value of the test:
-srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 docker://ubuntu:18.04 ls -dlh processor0
+srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 $theImage ls -dlh processor0
 return $?
 }
 #End ===========================================================

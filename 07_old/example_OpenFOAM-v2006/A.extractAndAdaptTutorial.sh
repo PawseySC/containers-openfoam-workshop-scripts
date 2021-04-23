@@ -5,8 +5,7 @@
 #SBATCH --time=0:10:00
 #SBATCH --export=none
 
-#------
-echo "1. Loading the container settings, case settings and auxiliary functions (order is important)"
+#1. Loading the container settings, case settings and auxiliary functions (order is important)
 source $SLURM_SUBMIT_DIR/imageSettingsSingularity.sh
 source $SLURM_SUBMIT_DIR/caseSettingsFoam.sh
 overlayFunctionsScript=$auxScriptsDir/ofContainersOverlayFunctions.sh
@@ -17,19 +16,14 @@ else
    echo "Exiting"; exit 1
 fi
 
-#------
-echo "2. Copy the tutorialCase to the workingDir"
-cd $SLURM_SUBMIT_DIR
+#2. Copy the tutorialCase to the workingDir
 if ! [ -d $caseDir ]; then
-   echo "The tutorial case to copy is: $tutorialCase"
-   echo "Into caseDir=$caseDir"
    srun -n 1 -N 1 singularity exec $theImage bash -c 'cp -r $FOAM_TUTORIALS/'"$tutorialCase $caseDir" 
 else
    echo "The case=$caseDir already exists, no new copy has been performed"
 fi
 
-#------
-echo "3. Going into the case directory"
+#3. Going into the case directory
 if [ -d $caseDir ]; then
    cd $caseDir
    echo "pwd=$(pwd)"
@@ -38,14 +32,12 @@ else
    echo "Exiting"; exit 1
 fi
 
-#------
-echo "4. Defining OpenFOAM controlDict settings for Pawsey Best Practices"
+#4. Defining OpenFOAM controlDict settings for Pawsey Best Practices
 foam_writeFormat="binary"
 sed -i 's,^writeFormat.*,writeFormat    '"$foam_writeFormat"';,' ./system/controlDict
 foam_runTimeModifiable="false"
 sed -i 's,^runTimeModifiable.*,runTimeModifiable    '"$foam_runTimeModifiable"';,' ./system/controlDict
 
-#------
-echo "X. Final step"
+#X. Final step
 echo "Script done"
 

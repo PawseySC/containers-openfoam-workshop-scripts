@@ -1,5 +1,6 @@
 #!/bin/bash -l
 #SBATCH --job-name=reconstructFromOverlay
+#SBATCH --output=%x---%j.out
 #SBATCH --ntasks=4
 #SBATCH --mem=4G
 #SBATCH --ntasks-per-node=28
@@ -67,9 +68,7 @@ echo '#5. Create reconstruction array (intended times to be reconstructed are se
 #           This is useful for recursive jobs.
 #ALSO: The formats inside the apostrophes ("format") are the only accepted by function:
 #      "generateReconstructArray" (check the function definition for further information)
-echo "AEG:E.1.A: reconstructTimes=$reconstructTimes"
 : ${reconstructTimes:="all"}
-echo "AEG:E.1.B: reconstructTimes=$reconstructTimes"
 #: ${reconstructTimes:="-2"}
 #: ${reconstructTimes:="+2"}
 #: ${reconstructTimes:="20"}
@@ -83,6 +82,7 @@ if [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
+#========================
 #6. Point the soft links to the ./bakDir/bak.processor* directories
 pointToBak $foam_numberOfSubdomains;success=$? #Calling function to point towards the ./bakDir/bak.processors
 if [ $success -ne 0 ]; then
@@ -90,9 +90,10 @@ if [ $success -ne 0 ]; then
    echo "Exiting";exit 1
 fi
 
+#========================
 #7. Define the directories to be preserved (and not removed after reconst) in the ./bakDir/bak.processor*
 ##7.1 Generate a list of the time directories already inside ./bakDir/bak.processor*
-ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > bakTimes.$SLURM_JOBID
+ls -dt ${reconstructDir}/bakDir/bak.processor0/[0-9]* | sed "s,${reconstructDir}/bakDir/bak.processor0/,," > bakTimes.$SLURM_JOBID
 sort -n bakTimes.$SLURM_JOBID -o bakTimesSorted.$SLURM_JOBID
 rm bakTimes.$SLURM_JOBID
 i=0
@@ -135,19 +136,18 @@ fi
 #keepTimesArr[$nKeepTimes]=28;(( nKeepTimes++ ))
 #keepTimesArr[$nKeepTimes]=29;(( nKeepTimes++ ))
 #keepTimesArr[$nKeepTimes]=30;(( nKeepTimes++ ))
-echo "All times to be preserved in ./bakDir/bak.processor* are:"
+echo "All times to be preserved in ${reconstructDir}/bakDir/bak.processor* are:"
 echo "${keepTimesArr[@]}"
 
+#========================
 #8. Check for already reconstructed cases and set the `-time $timeString` argument for the reconstructPar tool
 countRec=0
 realToDoReconstruct[$countRec]=-1
 for ii in ${!arrayReconstruct[@]}; do
-   correctReconstruct[$ii]="true" #Initialising this array to be used in the following subsections (9.)
+   correctReconstruct[$ii]="true" #Initialising this array to be used in the following subsections: (12.,)
    timeHere=${arrayReconstruct[ii]}
    if [ -f ${caseDir}/${timeHere}/.reconstructDone ]; then
       echo "Time ${timeHere} has already been reconstructed in ${caseDir}. No reconstruction will be performed"
-   elif [ -f ${reconstructDir}/${timeHere}/.reconstructDone ]; then
-      echo "Time ${timeHere} has already been reconstructed in ${reconstructDir}. No reconstruction will be performed"
    else
       realToDoReconstruct[$countRec]=$timeHere
      (( countRec++ ))
@@ -156,6 +156,7 @@ done
 echo "Times to be reconstructed are:"
 echo "${realToDoReconstruct[@]}"
 
+#========================
 #----------------------------------------------
 #NOTE: Executing the following steps in batches within a while loop.
 #      In each cycle of the loop, a batch of size $maxTimeTransfersFromOverlays will be processed.
@@ -167,6 +168,7 @@ if [ $countRec -gt 0 ]; then
    unset leftToDoReconstruct
    leftToDoReconstruct=("${realToDoReconstruct[@]}")
    while [ $kStart -lt ${#realToDoReconstruct[@]} ]; do
+      #---------
       ## 9. Create the batch to reconstruct
       timeString=""
       countHere=0
@@ -206,6 +208,7 @@ if [ $countRec -gt 0 ]; then
          echo "kNext=$kNext"
       fi
 
+      #---------
       ## 10. Copy from the ./overlayFSDir/overlay* the full batch into ./bakDir/bak.processor*
       unset arrayCopyIntoBak
       arrayCopyIntoBak=("${hereToDoReconstruct[@]}")
@@ -216,11 +219,13 @@ if [ $countRec -gt 0 ]; then
          echo "Exiting";exit 1
       fi
       
+      #---------
       ## 11. Reconstruct all times for this batch.
       echo "Start reconstruction of timeString=$timeString"
       logFileHere=$logsDir/log.reconstructPar.${SLURM_JOBID}_${hereToDoReconstruct[0]}-${hereToDoReconstruct[-1]}
       srun -n 1 -N 1 singularity exec $theImage reconstructPar -time ${timeString} 2>&1 | tee $logFileHere
       
+      #---------
       ## 12. Mark successfully reconstructed times with the "flag" file: .reconstructDone, and remove the decomposed time results, and move the reconstructed results to the case directory
       noErrors="true"
       for ii in ${!arrayReconstruct[@]}; do
@@ -256,6 +261,7 @@ if [ $countRec -gt 0 ]; then
                if [ -d ${reconstructDir}/${timeHere} ]; then
                   touch ${reconstructDir}/${timeHere}/.reconstructDone
                   echo "Reconstruction finished, and file ${timeHere}/.reconstructionDone created."
+                  echo "Moving the whole directory ${timeHere} to ${caseDir}"
                   mv "${reconstructDir}/${timeHere}" "${caseDir}/${timeHere}"
                   if [ ! -f ${caseDir}/${timeHere}/.reconstructDone ]; then
                      echo "${caseDir}/${timeHere}/.reconstructDone was not found"
@@ -272,6 +278,7 @@ if [ $countRec -gt 0 ]; then
          fi
       done
 
+      #---------
       ## 13. Remove the decomposed time results if they have been successfully reconstructed (except those indicated to be kept)
       if [ "${noErrors}" = "true" ]; then
          for ii in ${!arrayReconstruct[@]}; do
@@ -281,15 +288,27 @@ if [ $countRec -gt 0 ]; then
                [ $(echo "$timeHere <= ${realToDoReconstruct[((kNext-1))]}" | bc -l) -eq 1 ] && \
                [ $(echo "$timeHere >= ${realToDoReconstruct[$kStart]}" | bc -l) -eq 1 ]; then
                echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
+               usedCores=0
                for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-                  if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-                     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+                  if [ -d ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} ]; then
+                     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+                     (( usedCores++ ))
+                  fi
+                  if [ $usedCores -ge $SLURM_NTASKS ]; then
+                     wait
+                     usedCores=0
                   fi
                done
                wait
+               usedCores=0
                for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-                  if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-                     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+                  if [ -d ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} ]; then
+                     srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+                     (( usedCores++ ))
+                  fi
+                  if [ $usedCores -ge $SLURM_NTASKS ]; then
+                     wait
+                     usedCores=0
                   fi
                done
                wait
@@ -299,47 +318,74 @@ if [ $countRec -gt 0 ]; then
          echo "There were some errors during reconstruction. This script will stop here"
          echo "Please check the log files to investigate the possible sources of reconstruction errors"
          echo "Decomposed results currently in the host will not be removed to assist with the investigation"
-         echo "Stop recursive jobs if they exist"
+         echo "Warning message: Warn Recursive Jobs, and stop if error keeps repeating"
          echo "Exiting"; exit 1
       fi
       kStart=$kNext
    done
 else
-   echo "The times asked to be reconstructed are already reconstructed"
+   echo "The times asked to be reconstructed are already reconstructed."
 fi
 
+#========================
 #14. As a final step, remove any decomposed time result that was left in the host file system, but to be removed
 #    (as it was already reconstructed successfully and is not indicated to be kept)
 ##14.0 Check if there are times left in ./bakDir/bak.processor* directories (asking for the last one here)
+echo "Check for leftovers left in the ./abkDir/bak.processor* directories"
 lastTimeReached=$(getNResultTime -1 "bak");success=$? #Calling function to obtain the Last Time result available (-1)
 echo "lastTimeReached=$lastTimeReached"
 if [ $lastTimeReached -eq -1 ]; then
    echo "The ./bakDir/bak.processor* directories have no more results saved within"
    echo "Nothing else to be removed from the file system"
 else
+   #---------
    ##14.1 Generating the array of existing decomposed times in the local host
    unset arrayReconstruct #This global variable will be re-created in the function below
-   generateReconstructArray "${keepTimesArr[0]}:${keepTimesArr[-1]}" "bak";success=$? #Calling function to generate "arrayReconstruct"
+   generateReconstructArray "$reconstructTimes" $insideDir $surnameTag;success=$? #Calling fucntion to generate "arrayReconstruct"
    if [ $success -ne 0 ]; then
       echo "Failed creating the arrayReconstruct"
       echo "Exiting";exit 1
    fi
+   cleanRangeFirst=${arrayReconstruct[0]}
+   cleanRangeLast=${arrayReconstruct[-1]}
+   unset arrayReconstruct #This global variable will be re-created in the function below
+   generateReconstructArray "$cleanRangeFirst:$cleanRangeLast" "bak";success=$? #Calling function to generate "arrayReconstruct"
+   if [ $success -ne 0 ]; then
+      echo "Failed creating the arrayReconstruct"
+      echo "Exiting";exit 1
+   fi
+   #---------
    ##14.2 Deleting decomposed results, except those indicated to be kept
    for ii in ${!arrayReconstruct[@]}; do
       timeHere=${arrayReconstruct[ii]}
       indexKeep=$(getIndex "${timeHere}" "${keepTimesArr[@]}")
+      if [ -f ${reconstructDir}/${timeHere}/.reconstructDone ]; then
+         mv ${reconstructDir}/${timeHere} ${caseDir}/${timeHere}
+      fi
       if [ $indexKeep -eq -1 ]; then
-         if [ -f ${timeHere}/.reconstructDone ]; then
+         if [ -f ${caseDir}/${timeHere}/.reconstructDone ]; then
             echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
+            usedCores=0
             for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-               if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+               if [ -d ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} ]; then
+                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+                  (( usedCores++ ))
+               fi
+               if [ $usedCores -ge $SLURM_NTASKS ]; then
+                  wait
+                  usedCores=0
                fi
             done
             wait
+            usedCores=0
             for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
-               if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
-                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ./bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+               if [ -d ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} ]; then
+                  srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+                  (( usedCores++ ))
+               fi
+               if [ $usedCores -ge $SLURM_NTASKS ]; then
+                  wait
+                  usedCores=0
                fi
             done
             wait
@@ -353,5 +399,15 @@ else
    done
 fi
 
+#========================
+#15. If working recursively, send the Finishing message if there was no reconstruction executed
+if [ $countRec -eq 0 ]; then
+   echo "No times were marked to reconstruction in this job"
+   echo "Times to be reconstructed = ${realToDoReconstruct[@]}"
+   echo "Therefore, if there is any recursive call for reconstruction it can be considered finished"
+   echo "Finish message: Finish Recursive Jobs, if any"
+fi
+
+#========================
 #X. Final step
 echo "Script done"

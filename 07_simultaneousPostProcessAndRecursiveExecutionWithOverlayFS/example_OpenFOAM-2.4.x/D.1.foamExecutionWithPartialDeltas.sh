@@ -1,6 +1,6 @@
 #!/bin/bash -l
-#SBATCH --job-name=solverExecution
-#SBATCH --output="%x-%j.out"
+#SBATCH --job-name=foamExecutionWithDeltas
+#SBATCH --output="%x---%j.out"
 #SBATCH --ntasks=5
 #SBATCH --ntasks-per-node=28
 #SBATCH --cluster=zeus
@@ -64,9 +64,15 @@ foam_startTime=0.0
 #foam_endTime=10.0
 #foam_endTime=20.0
 #foam_endTime=40.0
+#foam_endTime=50.0
 #foam_endTime=60.0
-#foam_endTime=45.0
-foam_endTime=100.0
+foam_endTime=70.0
+#foam_endTime=80.0
+#foam_endTime=90.0
+#foam_endTime=100.0
+#foam_endTime=120.0
+#foam_endTime=140.0
+#foam_endTime=200.0
 foam_writeControl=runTime
 foam_deltaT=0.2
 foam_writeInterval=$foam_deltaT #This should be a reasonable writing frequency
@@ -109,6 +115,7 @@ for partial_counter in `seq 1 $maxCycles`; do
       partial_startTime=$(getNResultTime -2 $insideDir);success=$? #Calling function to obtain the secondLast Time available (-2)
       if [ $success -ne 0 ]; then
          echo "Failed obtaining the secondLast Time (-2) available"
+         echo "Warning message: Warn Recursive Jobs, stop recursive jobs if this warning repeats"
          echo "Exiting";exit 1
       fi
    fi
@@ -136,11 +143,11 @@ for partial_counter in `seq 1 $maxCycles`; do
       echo "Submitting reconstruction for results in: ./overlayFSDir/overlay*${newSurnameTag} files" 
       pathHere=$PWD
       cd $SLURM_SUBMIT_DIR
-      sbatch --job-name=reconstruct${newSurnameTag} \
+      reconstructTimes="all"
+      sbatch --job-name=recuRec${newSurnameTag} \
              --export="surnameTag=${newSurnameTag},reconstructTimes=${reconstructTimes}" \
              --clusters=zeus \
-             ${SLURM_SUBMIT_DIR}/E.0.reconstruct-recursive-template.sh
-      echo "AEG:D.1: reconstructTimes=$reconstructTimes"
+             ${SLURM_SUBMIT_DIR}/E.0.reconstruct-recursiveManager.sh
       cd $pathHere
    else
       echo "The same set of overlay files will be used for this partial srun"
@@ -183,11 +190,13 @@ for partial_counter in `seq 1 $maxCycles`; do
    if [ $st -eq 1 ]; then
       echo "lastTimeReached ($lastTimeReached) >= foam_endTime ($foam_endTime)"
       echo "Stopping the cycle of partial srun's"
+      echo "Finish message: Finish Recursive Jobs, as foam_endTime=$foam_endTime has been reached"
       break
    fi
 done
 
-#10. Transfer a few result times available inside the OverlayFS towards the ./bakDir/bak.procesors directories
+#10. Transfer a few result times available inside the OverlayFS towards the ./bakDir/bak.procesor* directories
+#reconstructTimes="" #A non-value will skip this final transfer of some results
 reconstructTimes=-2 #A negative value "-N" will be interpreted as the last N times by the function "generateReconstructArray"
 if [ -z "$reconstructTimes" ]; then
    echo "reconstructTimes string was not set, implying that:"
@@ -208,7 +217,55 @@ else
    fi
 fi
 
-#11. List the existing times inside the ./overlayFSDir/overlay0 
+#11. Cleaning those results in ./bakDir/bak.processor* directories that have already been reconstructed
+## Generate a list of the time directories already inside ./bakDir/bak.processor*
+ls -dt ./bakDir/bak.processor0/[0-9]* | sed "s,./bakDir/bak.processor0/,," > bakTimes.$SLURM_JOBID
+sort -n bakTimes.$SLURM_JOBID -o bakTimesSorted.$SLURM_JOBID
+rm bakTimes.$SLURM_JOBID
+i=0
+bakArr[0]=-1
+echo "Already existing times in bak are:"
+while read textTimeDir; do
+   bakArr[$i]=$textTimeDir
+   echo "The $i timeDir is: ${bakArr[$i]}"
+   ((i++))
+done < bakTimesSorted.$SLURM_JOBID
+nTimeBak=$i
+rm bakTimesSorted.$SLURM_JOBID
+if [ $nTimeBak -gt 0 ]; then
+   for timeDir in ${bakArr[@]}; do
+      if [ $timeDir -eq 0 ]; then continue; fi #The time 0 is kept 
+      if [ -f ./$timeDir/.reconstructDone ]; then
+         echo "Removing time ${timeHere} in the ./bakDir/bak.processor* directories"
+         usedCores=0
+         for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+            if [ -d ./bakDir/bak.processor${jj}/${timeHere} ]; then
+               srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find -P ./bakDir/bak.processor${jj}/${timeHere} -type f -print0 -type l -print0 | xargs -0 munlink &
+               (( usedCores++ ))
+            fi
+            if [ $usedCores -ge $SLURM_NTASKS ]; then
+               wait
+               usedCores=0
+            fi
+         done
+         wait
+         usedCores=0
+         for jj in $(seq 0 $((foam_numberOfSubdomains -1))); do
+            if [ -d ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} ]; then
+               srun -n 1 -N 1 --mem-per-cpu=0 --exclusive find ${reconstructDir}/bakDir/bak.processor${jj}/${timeHere} -depth -type d -empty -delete &
+               (( usedCores++ ))
+            fi
+            if [ $usedCores -ge $SLURM_NTASKS ]; then
+               wait
+               usedCores=0
+            fi
+         done
+         wait
+      fi
+   done
+fi
+
+#12. List the existing times inside the ./overlayFSDir/overlay0 
 echo "Listing the available times inside ./overlayFSDir/overlay0"
 srun -n 1 -N 1 singularity exec --overlay ./overlayFSDir/overlay0 $theImage ls -lat processor0/
 

@@ -7,8 +7,7 @@
 #SBATCH --time=0:10:00
 #SBATCH --export=none
 
-#------
-echo "1. Loading the container settings (order is important)"
+#1. Loading the container settings (order is important)
 source $SLURM_SUBMIT_DIR/imageSettingsSingularity.sh
 source $SLURM_SUBMIT_DIR/caseSettingsFoam.sh
 overlayFunctionsScript=$auxScriptsDir/ofContainersOverlayFunctions.sh
@@ -19,9 +18,7 @@ else
    echo "Exiting"; exit 1
 fi
 
-#------
-echo "2. Going into the case and creating the logs directory"
-cd $SLURM_SUBMIT_DIR
+#2. Going into the case and creating the logs directory
 if [ -d $caseDir ]; then
    cd $caseDir
    echo "pwd=$(pwd)"
@@ -29,21 +26,18 @@ else
    echo "For some reason, the case=$caseDir, does not exist"
    echo "Exiting"; exit 1
 fi
-logsDir=$caseDir/logs/pre
+logsDir=./logs/pre
 if ! [ -d $logsDir ]; then
    mkdir -p $logsDir
 fi
 
-#------
-echo "3. Reading the OpenFOAM decomposeParDict settings"
+#3. Reading the OpenFOAM decomposeParDict settings
 foam_numberOfSubdomains=$(grep "^numberOfSubdomains" ./system/decomposeParDict | tr -dc '0-9')
 
-#------
-echo "4. Perform all preprocessing OpenFOAM steps up to decomposition"
+#4. Perform all preprocessing OpenFOAM steps up to decomposition
 srun -n 1 -N 1 singularity exec $theImage blockMesh 2>&1 | tee $logsDir/log.blockMesh
-srun -n 1 -N 1 singularity exec $theImage decomposePar -cellDist 2>&1 | tee $logsDir/log.decomposePar
+srun -n 1 -N 1 singularity exec $theImage decomposePar $foam_options -cellDist 2>&1 | tee $logsDir/log.decomposePar
 
-#------
-echo "X. Final step"
+#X. Final step
 echo "Script done"
 
