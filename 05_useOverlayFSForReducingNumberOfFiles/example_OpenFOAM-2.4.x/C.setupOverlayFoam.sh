@@ -46,7 +46,7 @@ echo "The size in Gb is overlaySizeGb=$overlaySizeGb"
 if [ $overlaySizeGb -gt 0 ]; then
    countSize=$(( overlaySizeGb * 1024 * 1024 ))
    srun -n 1 -N 1 singularity exec docker://ubuntu:18.04 bash -c " \
-        mkdir -p overlay_tmp/upper && \
+        mkdir -p overlay_tmp/upper overlay_tmp/work && \
         dd if=/dev/zero of=overlay0 count=$countSize bs=1024 && \
         mkfs.ext3 -d overlay_tmp overlay0 && rm -rf overlay_tmp \
         "
